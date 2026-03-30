@@ -1,5 +1,6 @@
 package com.pitstop.pitstop_backend.mechanic;
 
+import com.pitstop.pitstop_backend.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -18,10 +19,10 @@ public class MechanicService {
         return mechanicRepository.save(mechanic);
     }
     public Mechanic getMechanicById(Long id){
-        return mechanicRepository.findById(id).orElseThrow(()-> new RuntimeException("Mechanic not found with id: "+id));
+        return mechanicRepository.findById(id).orElseThrow(()-> new ResourceNotFoundException("Mechanic not found with id "+ id));
     }
     public Mechanic updateMechanic(Long id, Mechanic updatedData){
-        Mechanic existingMechanic = mechanicRepository.findById(id).orElseThrow(()->new RuntimeException("Mechanic not found with id: "+ id ));
+        Mechanic existingMechanic = mechanicRepository.findById(id).orElseThrow(()->new ResourceNotFoundException("Mechanic not found with id "+ id));
         existingMechanic.setAvailable(updatedData.isAvailable());
         existingMechanic.setLatitude(updatedData.getLatitude());
         existingMechanic.setLongitude(updatedData.getLongitude());
@@ -30,7 +31,7 @@ public class MechanicService {
     }
     public String deleteMechanic(Long id){
         if(!mechanicRepository.existsById(id)){
-            throw new RuntimeException("Mechanic not found with id: "+id);
+            throw new ResourceNotFoundException("Mechanic not found with id "+ id);
         }
         mechanicRepository.deleteById(id);
         return "Mechanic with ID "+id+" has been removed from PitStop";
