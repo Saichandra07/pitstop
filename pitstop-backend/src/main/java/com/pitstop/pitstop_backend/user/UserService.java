@@ -1,7 +1,10 @@
 package com.pitstop.pitstop_backend.user;
 
 
+import com.pitstop.pitstop_backend.auth.JwtUtil;
 import com.pitstop.pitstop_backend.exception.ResourceNotFoundException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -9,10 +12,26 @@ import java.util.List;
 @Service
 public class UserService {
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
     private final UserRepository userRepository;
 
     public UserService(UserRepository userRepository){
         this.userRepository = userRepository;
+    }
+
+    public String loginUser(String email, String password){
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(()-> new ResourceNotFoundException("User not found"));
+
+        if(!passwordEncoder.matches(password, user.getPasswordHash())){
+            throw new IllegalArgumentException("Invalid password");
+        }
+        return jwtUtil.generateToken(user.getEmail());
     }
 
     public User createUser(User user){
@@ -22,6 +41,8 @@ public class UserService {
         if(userRepository.existsByPhone(user.getPhone())){
             throw new IllegalArgumentException(("PhoneNumber already registereed "+ user.getPhone()));
         }
+
+        user.setPasswordHash(passwordEncoder.encode(user.getPasswordHash()));
         return userRepository.save(user);
     }
     public List<User> getAllUsers(){
