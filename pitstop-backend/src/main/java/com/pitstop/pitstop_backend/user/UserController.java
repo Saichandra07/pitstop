@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/users")
+@RequestMapping("/api/users")
 public class UserController {
     private final UserService userService;
 
@@ -16,7 +16,13 @@ public class UserController {
         this.userService = userService;
     }
 
-    @PostMapping
+    @PostMapping("/login")
+    public ResponseEntity<String> login(@RequestBody LoginRequest request){
+        String token = userService.loginUser(request.email(), request.password());
+        return ResponseEntity.ok(token);
+    }
+
+    @PostMapping("/register")
     public ResponseEntity<User> createUser(@RequestBody User user){
         return new ResponseEntity<>(userService.createUser(user), HttpStatus.CREATED);
     }
@@ -37,4 +43,5 @@ public class UserController {
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
     }
+    record LoginRequest(String email, String password){}
 }
