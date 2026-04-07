@@ -4,6 +4,7 @@ package com.pitstop.pitstop_backend.user;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.pitstop.pitstop_backend.user.LoginResponse;
 
 import java.util.List;
 
@@ -17,9 +18,9 @@ public class UserController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<String> login(@RequestBody LoginRequest request){
-        String token = userService.loginUser(request.email(), request.password());
-        return ResponseEntity.ok(token);
+    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request){
+        LoginResponse response = userService.loginUser(request.email(), request.password());
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/register")
