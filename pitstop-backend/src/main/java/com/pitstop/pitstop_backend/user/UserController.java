@@ -1,10 +1,10 @@
 package com.pitstop.pitstop_backend.user;
 
 
+import com.pitstop.pitstop_backend.common.dto.LoginResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import com.pitstop.pitstop_backend.user.LoginResponse;
 
 import java.util.List;
 

@@ -1,6 +1,7 @@
 package com.pitstop.pitstop_backend.mechanic;
 
 import com.pitstop.pitstop_backend.auth.JwtUtil;
+import com.pitstop.pitstop_backend.common.dto.LoginResponse;
 import com.pitstop.pitstop_backend.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,20 +24,21 @@ public class MechanicService {
         this.mechanicRepository = mechanicRepository;
     }
 
-    public String loginMechanic(String email, String password){
+    public LoginResponse loginMechanic(String email, String password){
         Mechanic mechanic = mechanicRepository.findByEmail(email)
                 .orElseThrow(()-> new ResourceNotFoundException("Mechanic not found"));
 
-        if (!passwordEncoder.matches(password, mechanic.getPassword())){
+        if (!passwordEncoder.matches(password, mechanic.getPasswordHash())){
             throw new IllegalArgumentException("Invalid password");
         }
-        return jwtUtil.generateToken(mechanic.getEmail());
+        String token = jwtUtil.generateToken(mechanic.getEmail());
+        return new LoginResponse(token, mechanic.getId(), mechanic.getName(),mechanic.getEmail());
     }
     public List<Mechanic> getAllMechanics(){
         return mechanicRepository.findAll();
     }
     public Mechanic addMechanic(Mechanic mechanic){
-        mechanic.setPassword(passwordEncoder.encode(mechanic.getPassword()));
+        mechanic.setPasswordHash(passwordEncoder.encode(mechanic.getPasswordHash()));
         return mechanicRepository.save(mechanic);
     }
     public Mechanic getMechanicById(Long id){
