@@ -1,5 +1,6 @@
 package com.pitstop.pitstop_backend.mechanic;
 
+import com.pitstop.pitstop_backend.common.dto.LoginResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -19,9 +20,9 @@ public class MechanicController {
     record LoginRequest(String email, String password){}
 
     @PostMapping("/login")
-    public ResponseEntity<String> login(@RequestBody LoginRequest request){
-        String token = mechanicService.loginMechanic(request.email(), request.password());
-        return ResponseEntity.ok(token);
+    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request){
+        LoginResponse response = mechanicService.loginMechanic(request.email(), request.password());
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping

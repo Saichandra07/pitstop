@@ -2,6 +2,7 @@ package com.pitstop.pitstop_backend.user;
 
 
 import com.pitstop.pitstop_backend.auth.JwtUtil;
+import com.pitstop.pitstop_backend.common.dto.LoginResponse;
 import com.pitstop.pitstop_backend.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;

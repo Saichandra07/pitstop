@@ -13,7 +13,7 @@ public class Mechanic {
 
     private String name;
     private String email;
-    private String password;
+    private String passwordHash;
     private String mobileNumber;
 
     @ElementCollection
@@ -33,10 +33,10 @@ public class Mechanic {
     public Mechanic() {
     }
 
-    public Mechanic(String name, String email, String password, String mobileNumber, List<String> skills, List<String> vehicleTypes, boolean isAvailable, boolean isVerified, double latitude, double longitude) {
+    public Mechanic(String name, String email, String passwordHash, String mobileNumber, List<String> skills, List<String> vehicleTypes, boolean isAvailable, boolean isVerified, double latitude, double longitude) {
         this.name = name;
         this.email = email;
-        this.password = password;
+        this.passwordHash = passwordHash;
         this.mobileNumber = mobileNumber;
         this.skills = skills;
         this.vehicleTypes = vehicleTypes;
@@ -46,11 +46,11 @@ public class Mechanic {
         this.longitude = longitude;
     }
 
-    public Mechanic(Long id, String name, String email, String password, String mobileNumber, List<String> skills, List<String> vehicleTypes, boolean isAvailable, boolean isVerified, double latitude, double longitude) {
+    public Mechanic(Long id, String name, String email, String passwordHash, String mobileNumber, List<String> skills, List<String> vehicleTypes, boolean isAvailable, boolean isVerified, double latitude, double longitude) {
         this.id = id;
         this.name = name;
         this.email = email;
-        this.password = password;
+        this.passwordHash = passwordHash;
         this.mobileNumber = mobileNumber;
         this.skills = skills;
         this.vehicleTypes = vehicleTypes;
@@ -84,12 +84,12 @@ public class Mechanic {
         this.email = email;
     }
 
-    public String getPassword() {
-        return password;
+    public String getPasswordHash() {
+        return passwordHash;
     }
 
-    public void setPassword(String password) {
-        this.password = password;
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
     }
 
     public String getMobileNumber() {
@@ -154,7 +154,7 @@ public class Mechanic {
                 "id=" + id +
                 ", name='" + name + '\'' +
                 ", email='" + email + '\'' +
-                ", password='" + password + '\'' +
+                ", password='" + passwordHash + '\'' +
                 ", mobileNumber='" + mobileNumber + '\'' +
                 ", skills=" + skills +
                 ", vehicleTypes=" + vehicleTypes +
