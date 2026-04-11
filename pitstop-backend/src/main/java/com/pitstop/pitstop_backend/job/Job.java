@@ -27,6 +27,38 @@ public class Job {
     @Column(nullable = false)
     private JobStatus status = JobStatus.PENDING;
 
+    public VehicleType getVehicleType() {
+        return vehicleType;
+    }
+
+    public void setVehicleType(VehicleType vehicleType) {
+        this.vehicleType = vehicleType;
+    }
+
+    public ProblemType getProblemType() {
+        return problemType;
+    }
+
+    public void setProblemType(ProblemType problemType) {
+        this.problemType = problemType;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public void setAddress(String address) {
+        this.address = address;
+    }
+
+    @Enumerated(EnumType.STRING)
+    private VehicleType vehicleType;
+
+    @Enumerated(EnumType.STRING)
+    private ProblemType problemType;
+
+    private String address;
+
     private String description;
 
     @Column(nullable = false)
