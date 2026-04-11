@@ -1,5 +1,6 @@
 package com.pitstop.pitstop_backend.job;
 
+import com.pitstop.pitstop_backend.job.dto.SosRequestDto;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -63,6 +64,11 @@ public class JobController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void>deleteJob(@PathVariable Long id){
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/sos")
+    public ResponseEntity<Job> createSos(@RequestBody SosRequestDto dto){
+        return ResponseEntity.status(HttpStatus.CREATED).body(jobService.createSosRequest(dto));
     }
 
 }

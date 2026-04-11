@@ -1,6 +1,7 @@
 package com.pitstop.pitstop_backend.job;
 
 import com.pitstop.pitstop_backend.exception.ResourceNotFoundException;
+import com.pitstop.pitstop_backend.job.dto.SosRequestDto;
 import com.pitstop.pitstop_backend.mechanic.Mechanic;
 import com.pitstop.pitstop_backend.mechanic.MechanicRepository;
 import com.pitstop.pitstop_backend.user.User;
@@ -76,6 +77,21 @@ public class JobService {
     public void deleteJob(Long id){
         Job job = getJobById(id);
         jobRepository.delete(job);
+    }
+    public Job createSosRequest(SosRequestDto dto){
+        User user = userRepository.findById(dto.getUserId())
+                .orElseThrow(()-> new ResourceNotFoundException("User not found"));
+
+        Job job = new Job();
+        job.setUser(user);
+        job.setVehicleType(dto.getVehicleType());
+        job.setProblemType(dto.getProblemType());
+        job.setDescription(dto.getDescription());
+        job.setLatitude(dto.getLatitude());
+        job.setLongitude(dto.getLongitude());
+        job.setAddress(dto.getAddress());
+        job.setStatus(JobStatus.PENDING);
+        return jobRepository.save(job);
     }
 
 }

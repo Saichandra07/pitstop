@@ -36,6 +36,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/users/register", "/api/users/login").permitAll()
                         .requestMatchers("/api/mechanics/register", "/api/mechanics/login").permitAll()
+                        .requestMatchers("/api/jobs/sos").permitAll()
                         .anyRequest().authenticated()
                 ) .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
