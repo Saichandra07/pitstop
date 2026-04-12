@@ -25,6 +25,12 @@ public class SecurityConfig {
     @Autowired
     private JwtFilter jwtFilter;
 
+    // constructor injection instead of @Autowired field injection
+    // more explicit, easier to test, avoids some circular dependency scenarios
+    public SecurityConfig(JwtFilter jwtFilter){
+        this.jwtFilter = jwtFilter;
+    }
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
 
@@ -34,9 +40,22 @@ public class SecurityConfig {
                 .sessionManagement(session->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/users/register", "/api/users/login").permitAll()
-                        .requestMatchers("/api/mechanics/register", "/api/mechanics/login").permitAll()
-                        .requestMatchers("/api/jobs/sos").permitAll()
+
+                        // new unified auth endpoints — old /api/users and /api/mechanics auth routes are dead
+                        .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
+
+                        // SOS open to any authenticated account — USER or MECHANIC both can call for help
+                        .requestMatchers("/api/jobs/sos").authenticated()
+
+                        // mechanic-only endpoints — VERIFIED check happens in service layer
+                        // SecurityConfig only checks role here, not verificationStatus
+                        .requestMatchers("/api/mechanics/**").hasRole("MECHANIC")
+
+                        // job management — mechanics accept/update jobs
+                        .requestMatchers("/api/jobs/*/accept").hasRole("MECHANIC")
+                        .requestMatchers("/api/jobs/*/complete").hasRole("MECHANIC")
+
+                        // everything else requires authentication, any role
                         .anyRequest().authenticated()
                 ) .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
