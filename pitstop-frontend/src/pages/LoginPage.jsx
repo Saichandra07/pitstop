@@ -14,11 +14,12 @@ const LoginPage = () => {
     const handleSubmit = async(e) => {
         e.preventDefault();
         try{
-            const response = await api.post('/api/users/login', {email, password});
+            const response = await api.post('/api/auth/login', {email, password});
             login(response.data.token, {
                 id: response.data.id,
                 name:response.data.name,
-                email: response.data.email
+                email: response.data.email,
+                role: response.data.role // added role
             });
             navigate('/dashboard');
         } catch (err){

@@ -1,89 +1,49 @@
 package com.pitstop.pitstop_backend.job;
 
 import com.pitstop.pitstop_backend.exception.ResourceNotFoundException;
+import com.pitstop.pitstop_backend.job.dto.JobResponseDto;
 import com.pitstop.pitstop_backend.job.dto.SosRequestDto;
-import com.pitstop.pitstop_backend.mechanic.Mechanic;
-import com.pitstop.pitstop_backend.mechanic.MechanicRepository;
-import com.pitstop.pitstop_backend.user.User;
-import com.pitstop.pitstop_backend.user.UserRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class JobService {
+
     private final JobRepository jobRepository;
-    private final UserRepository userRepository;
-    private final MechanicRepository mechanicRepository;
 
-    public JobService(JobRepository jobRepository,
-                      UserRepository userRepository,
-                      MechanicRepository mechanicRepository
-                      ){
+    public JobService(JobRepository jobRepository) {
         this.jobRepository = jobRepository;
-        this.userRepository = userRepository;
-        this.mechanicRepository = mechanicRepository;
-
     }
 
-    // Create job - mechanic not assigned yet
-    public Job createJob (Long userId, Job job){
-        User user = userRepository.findById(userId)
-                .orElseThrow(()-> new ResourceNotFoundException("User not found with id "+ userId));
-        job.setUser(user);
-        job.setStatus(JobStatus.PENDING);
-        return jobRepository.save(job);
+    // ── Mapping ────────────────────────────────────────────────────────────────
+
+    private JobResponseDto toDto(Job job) {
+        return new JobResponseDto(
+                job.getId(),
+                job.getAccountId(),
+                job.getMechanicProfileId(),
+                job.getStatus(),
+                job.getVehicleType(),
+                job.getProblemType(),
+                job.getAddress(),
+                job.getDescription(),
+                job.getLatitude(),
+                job.getLongitude(),
+                job.getCreatedAt(),
+                job.getUpdatedAt()
+        );
     }
 
-    // Get all jobs
-    public List<Job> getAllJobs(){
-        return jobRepository.findAll();
-    }
+    // ── SOS / Create ───────────────────────────────────────────────────────────
 
-    // Get job by id
-    public Job getJobById(Long id){
-        return jobRepository.findById(id)
-                .orElseThrow(()-> new ResourceNotFoundException("Job not found with this id "+ id));
-    }
-
-    // Get all jobs for a specific user
-    public List<Job> getJobsByUser(Long userId){
-        return jobRepository.findByUserId(userId);
-    }
-
-    // Get all jobs for a specific mechanic
-    public List<Job> getJobsByMechanic(Long mechanicId){
-        return jobRepository.findByMechanicId(mechanicId);
-    }
-
-    // Assign a mechanic to a job
-    public Job assignMechanic(Long jobId , Long mechanicId){
-        Job job = getJobById(jobId);
-        Mechanic mechanic = mechanicRepository.findById(mechanicId)
-                .orElseThrow(()-> new ResourceNotFoundException("Mechanic not found with id "+ mechanicId));
-        job.setMechanic(mechanic);
-        job.setStatus(JobStatus.ACCEPTED);
-        return jobRepository.save(job);
-    }
-
-    // update job status
-    public Job updateStatus(Long jobId, JobStatus status){
-        Job job = getJobById(jobId);
-        job.setStatus(status);
-        return jobRepository.save(job);
-    }
-
-    // delete job
-    public void deleteJob(Long id){
-        Job job = getJobById(id);
-        jobRepository.delete(job);
-    }
-    public Job createSosRequest(SosRequestDto dto){
-        User user = userRepository.findById(dto.getUserId())
-                .orElseThrow(()-> new ResourceNotFoundException("User not found"));
-
+    // accountId comes from JWT — never from the request body
+    public JobResponseDto createSosRequest(Long accountId, SosRequestDto dto) {
         Job job = new Job();
-        job.setUser(user);
+        job.setAccountId(accountId);
         job.setVehicleType(dto.getVehicleType());
         job.setProblemType(dto.getProblemType());
         job.setDescription(dto.getDescription());
@@ -91,7 +51,80 @@ public class JobService {
         job.setLongitude(dto.getLongitude());
         job.setAddress(dto.getAddress());
         job.setStatus(JobStatus.PENDING);
-        return jobRepository.save(job);
+        return toDto(jobRepository.save(job));
     }
 
+    // ── Read ───────────────────────────────────────────────────────────────────
+
+    public List<JobResponseDto> getAllJobs() {
+        return jobRepository.findAll()
+                .stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    public JobResponseDto getJobById(Long id) {
+        return toDto(findJobOrThrow(id));
+    }
+
+    // Only returns jobs belonging to the calling user
+    public List<JobResponseDto> getMyJobs(Long accountId) {
+        return jobRepository.findByAccountId(accountId)
+                .stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    public List<JobResponseDto> getJobsByMechanic(Long mechanicProfileId) {
+        return jobRepository.findByMechanicProfileId(mechanicProfileId)
+                .stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    // ── Status Transitions ─────────────────────────────────────────────────────
+
+    // Enforces: PENDING → CANCELLED (only by the job owner)
+    public JobResponseDto cancelJob(Long jobId, Long accountId) {
+        Job job = findJobOrThrow(jobId);
+
+        if (!job.getAccountId().equals(accountId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You don't own this job");
+        }
+        if (job.getStatus() != JobStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Only PENDING jobs can be cancelled");
+        }
+
+        job.setStatus(JobStatus.CANCELLED);
+        return toDto(jobRepository.save(job));
+    }
+
+    // Enforces: PENDING → ACCEPTED → IN_PROGRESS → COMPLETED
+    public JobResponseDto updateStatus(Long jobId, JobStatus newStatus) {
+        Job job = findJobOrThrow(jobId);
+        JobStatus current = job.getStatus();
+
+        boolean valid = switch (current) {
+            case PENDING -> newStatus == JobStatus.ACCEPTED;
+            case ACCEPTED -> newStatus == JobStatus.IN_PROGRESS;
+            case IN_PROGRESS -> newStatus == JobStatus.COMPLETED;
+            default -> false;
+        };
+
+        if (!valid) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Invalid transition: " + current + " → " + newStatus);
+        }
+
+        job.setStatus(newStatus);
+        return toDto(jobRepository.save(job));
+    }
+
+    // ── Delete ─────────────────────────────────────────────────────────────────
+
+    public void deleteJob(Long id) {
+        jobRepository.delete(findJobOrThrow(id));
+    }
+
+    // ── Internal helper ────────────────────────────────────────────────────────
+
+    private Job findJobOrThrow(Long id) {
+        return jobRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Job not found with id " + id));
+    }
 }
