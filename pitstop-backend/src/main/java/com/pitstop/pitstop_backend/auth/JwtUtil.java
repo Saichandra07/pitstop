@@ -17,6 +17,7 @@ public class JwtUtil {
     private final String SECRET_KEY = "pitstop-super-secret-key-must-be-long-enough-256bits";
     private final long EXPIRATION_MS = 1000*60*60*10;
 
+
     public String generateToken(String email, Long accountId, Role role){
         return Jwts.builder()
                 .setSubject(email)
@@ -26,6 +27,7 @@ public class JwtUtil {
                 .setExpiration(new Date(System.currentTimeMillis()+EXPIRATION_MS))
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
+
     }
     private Key getSigningKey(){
         byte[] keyBytes = SECRET_KEY.getBytes(StandardCharsets.UTF_8);

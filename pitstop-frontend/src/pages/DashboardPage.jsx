@@ -19,13 +19,15 @@ export default function DashboardPage(){
     const [showSos, setShowSos] = useState(false);
     const[sosSuccess, setSosSuccess] = useState(false);
     const[sosError, setSosError] = useState('');
-    
-
+    const [sosLoading, setSosLoading] = useState(false);
     const [sosData, setSosData] = useState(defaultSosData);
+    const [cancelError, setCancelError] = useState('');
+
+
 
     //Fetch user's jobs - nop userId in URL, JWT handles identity
     useEffect(()=>{
-        api.get('/api/jobs/my')
+        api.get('/jobs/my/active')
         .then(res => setJobs(res.data))
         .catch(err => console.log(err));
     }, []);
@@ -36,30 +38,50 @@ export default function DashboardPage(){
     };
     
     const handleSos = () => {
-        setSosSuccess(false);
-        setSosError('');
-        navigator.geolocation.getCurrentPosition((pos) => {
+    setSosSuccess(false);
+    setSosError('');
+    navigator.geolocation.getCurrentPosition(
+        (pos) => {
             setSosData(prev => ({
                 ...prev,
                 latitude: pos.coords.latitude,
                 longitude: pos.coords.longitude
             }));
             setShowSos(true);
-        });
+        },
+        () => {
+            setSosError('Location access denied. Please enable GPS and try again.');
+        }
+    );
     };
 
     const submitSos = async () => {
-        try{
-            const res = await api.post('/api/jobs/sos', sosData);
-            //Reset form 
+        setSosLoading(true);
+        try {
+            const res = await api.post('/jobs/sos', sosData);
             setSosData(defaultSosData);
             setShowSos(false);
-            // Show success + refresh job list
             setSosSuccess(true);
-            setJobs(prev =>[...prev, res.data]);
-        } catch (err){
+            setJobs(prev => [...prev, res.data]);
+    }   catch (err) {
             setSosError('Failed to send SOS. Please try again.');
-            console.log(err);
+        console.log(err);
+    }   finally {
+            setSosLoading(false);
+        }
+    };
+
+    const cancelJob = async (jobId, status) => {
+        setCancelError('');
+        if (status === 'ACCEPTED') {
+            const confirmed = window.confirm('A mechanic is already on the way. Cancel anyway?');
+            if (!confirmed) return;
+        }
+        try {
+            await api.patch(`/jobs/${jobId}/cancel`);
+            setJobs(prev => prev.filter(job => job.id !== jobId));
+        } catch (err) {
+            setCancelError(err.response?.data?.message || 'Failed to cancel job.');
         }
     };
     
@@ -110,7 +132,7 @@ export default function DashboardPage(){
         
         {sosError && <p style={{color:'red'}}>{sosError}</p>}
 
-        <button onClick={submitSos}>Send SOS</button>
+        <button onClick={submitSos} disabled={sosLoading}>{sosLoading ? 'Sending...' : 'SendSOS'}</button>
         <button onClick={() => setShowSos(false)}>Cancel</button>
     </div>
 )}
@@ -118,18 +140,18 @@ export default function DashboardPage(){
 
             {/* Job list */}
             <h3>Your Jobs</h3>
-            {jobs.length ==0 ? (
-                <p>No jobs yet.</p>
-            ) : (
-                jobs.map(job => (
-                    <div key ={job.id}>
-                        <p>Status: {job.status}</p>
-                        <p>Problem: {job.problemType}</p>
-                        <p>Description: {job.description}</p>
-                        <p>Address:{job.address}</p>
-                    </div>
-                ))
-            )}
+            {cancelError && <p style={{ color: 'red' }}>{cancelError}</p>}
+            {jobs.map(job => (
+                <div key={job.id} style={{ border: '1px solid #ccc', margin: '8px', padding: '8px' }}>
+                    <p>Status: {job.status}</p>
+                    <p>Problem: {job.problemType}</p>
+                    <p>Description: {job.description}</p>
+                    <p>Address: {job.address}</p>
+                    {(job.status === 'PENDING' || job.status === 'ACCEPTED') && (
+                        <button onClick={() => cancelJob(job.id, job.status)}>Cancel</button>
+                    )}
+                </div>
+            ))}
         </div>
     );
 }

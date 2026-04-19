@@ -2,6 +2,7 @@ package com.pitstop.pitstop_backend.job.dto;
 
 import com.pitstop.pitstop_backend.job.ProblemType;
 import com.pitstop.pitstop_backend.job.VehicleType;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 public class SosRequestDto {
@@ -11,6 +12,10 @@ public class SosRequestDto {
 
     @NotNull(message = "Problem type is required")
     private ProblemType problemType;
+
+    // Required — "Honda Activa", "Swift Dzire" etc.
+    @NotBlank(message = "Vehicle name is required")
+    private String vehicleName;
 
     private String description;
 
@@ -27,6 +32,9 @@ public class SosRequestDto {
 
     public ProblemType getProblemType() { return problemType; }
     public void setProblemType(ProblemType problemType) { this.problemType = problemType; }
+
+    public String getVehicleName() { return vehicleName; }
+    public void setVehicleName(String vehicleName) { this.vehicleName = vehicleName; }
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }

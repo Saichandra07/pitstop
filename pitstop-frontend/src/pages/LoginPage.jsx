@@ -11,17 +11,22 @@ const LoginPage = () => {
     const {login} = useAuth();
     const navigate = useNavigate();
 
+
     const handleSubmit = async(e) => {
         e.preventDefault();
         try{
-            const response = await api.post('/api/auth/login', {email, password});
+            const response = await api.post('/auth/login', {email, password});
             login(response.data.token, {
                 id: response.data.id,
-                name:response.data.name,
+                name: response.data.name,
                 email: response.data.email,
-                role: response.data.role // added role
+                role: response.data.role,
+                verificationStatus: response.data.verificationStatus
             });
-            navigate('/dashboard');
+            const role = response.data.role;
+            if (role === "ADMIN") navigate("/admin/dashboard");
+            else if (role === "MECHANIC") navigate("/mechanic/dashboard");
+            else navigate("/dashboard");
         } catch (err){
             console.log('Error:', err.response);
             setError('Invalid email or password');

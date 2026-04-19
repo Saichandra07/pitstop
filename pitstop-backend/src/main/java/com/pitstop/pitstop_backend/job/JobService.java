@@ -1,5 +1,8 @@
 package com.pitstop.pitstop_backend.job;
 
+import com.pitstop.pitstop_backend.account.MechanicProfile;
+import com.pitstop.pitstop_backend.account.MechanicProfileRepository;
+import com.pitstop.pitstop_backend.account.VerificationStatus;
 import com.pitstop.pitstop_backend.exception.ResourceNotFoundException;
 import com.pitstop.pitstop_backend.job.dto.JobResponseDto;
 import com.pitstop.pitstop_backend.job.dto.SosRequestDto;
@@ -8,15 +11,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
 public class JobService {
 
     private final JobRepository jobRepository;
+    private final MechanicProfileRepository mechanicProfileRepository;
 
-    public JobService(JobRepository jobRepository) {
+    public JobService(JobRepository jobRepository,
+                      MechanicProfileRepository mechanicProfileRepository) {
         this.jobRepository = jobRepository;
+        this.mechanicProfileRepository = mechanicProfileRepository;
     }
 
     // ── Mapping ────────────────────────────────────────────────────────────────
@@ -29,6 +36,8 @@ public class JobService {
                 job.getStatus(),
                 job.getVehicleType(),
                 job.getProblemType(),
+                job.getVehicleName(),      // new
+                job.getPhotoUrl(),         // new
                 job.getAddress(),
                 job.getDescription(),
                 job.getLatitude(),
@@ -40,22 +49,38 @@ public class JobService {
 
     // ── SOS / Create ───────────────────────────────────────────────────────────
 
-    // accountId comes from JWT — never from the request body
     public JobResponseDto createSosRequest(Long accountId, SosRequestDto dto) {
+
+        // Issue #7 — one active SOS rule
+        // A user cannot have more than one live job at a time.
+        // "Live" = PENDING, ACCEPTED, or IN_PROGRESS.
+        boolean hasActiveJob = jobRepository.existsByAccountIdAndStatusIn(
+                accountId,
+                List.of(JobStatus.PENDING, JobStatus.ACCEPTED, JobStatus.IN_PROGRESS)
+        );
+        if (hasActiveJob) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "You already have an active job. Cancel it before submitting a new SOS.");
+        }
+
         Job job = new Job();
         job.setAccountId(accountId);
         job.setVehicleType(dto.getVehicleType());
         job.setProblemType(dto.getProblemType());
+        job.setVehicleName(dto.getVehicleName());              // new
         job.setDescription(dto.getDescription());
         job.setLatitude(dto.getLatitude());
         job.setLongitude(dto.getLongitude());
         job.setAddress(dto.getAddress());
         job.setStatus(JobStatus.PENDING);
-        return toDto(jobRepository.save(job));
+        job.setBroadcastRing(1);                               // new — start at ring 1
+        job.setBroadcastStartedAt(java.time.LocalDateTime.now()); // new — scheduler needs this
+        return toDto(jobRepository.save(job));  // add this line
     }
 
     // ── Read ───────────────────────────────────────────────────────────────────
 
+    // ADMIN only — full job list
     public List<JobResponseDto> getAllJobs() {
         return jobRepository.findAll()
                 .stream().map(this::toDto).collect(Collectors.toList());
@@ -65,9 +90,33 @@ public class JobService {
         return toDto(findJobOrThrow(id));
     }
 
-    // Only returns jobs belonging to the calling user
-    public List<JobResponseDto> getMyJobs(Long accountId) {
-        return jobRepository.findByAccountId(accountId)
+    // Issue #9 — user sees only their live jobs on dashboard
+    public List<JobResponseDto> getActiveJobs(Long accountId) {
+        return jobRepository.findByAccountIdAndStatusIn(
+                        accountId,
+                        List.of(JobStatus.PENDING, JobStatus.ACCEPTED, JobStatus.IN_PROGRESS))
+                .stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    // Issue #10 — user history: completed + cancelled
+    public List<JobResponseDto> getJobHistory(Long accountId) {
+        return jobRepository.findByAccountIdAndStatusIn(
+                        accountId,
+                        List.of(JobStatus.COMPLETED, JobStatus.CANCELLED))
+                .stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    public List<JobResponseDto> getPendingJobs(Long accountId) {
+        MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "No mechanic profile found"));
+
+        if (profile.getVerificationStatus() != VerificationStatus.VERIFIED) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Your profile is not verified. You cannot view jobs.");
+        }
+
+        return jobRepository.findByStatus(JobStatus.PENDING)
                 .stream().map(this::toDto).collect(Collectors.toList());
     }
 
@@ -76,31 +125,97 @@ public class JobService {
                 .stream().map(this::toDto).collect(Collectors.toList());
     }
 
+    // GET /api/jobs/mechanic/active — mechanic's current active job
+    public Optional<JobResponseDto> getMechanicActiveJob(Long accountId) {
+        MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No profile found"));
+
+        return jobRepository.findByMechanicProfileIdAndStatusIn(
+                        profile.getId(),
+                        List.of(JobStatus.ACCEPTED, JobStatus.IN_PROGRESS))
+                .stream().map(this::toDto).findFirst();
+    }
+
+    // ── Assignment ─────────────────────────────────────────────────────────────
+
+    // Issue #1, #4, #6 — mechanic accepts a PENDING job
+    // mechanicProfileId comes from JWT (accountId → look up mechanic_profile)
+    public JobResponseDto assignMechanic(Long jobId, Long accountId) {
+
+        // Resolve mechanic profile from accountId
+        MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "No mechanic profile found for this account"));
+
+        // Issue #4 — only VERIFIED mechanics can accept jobs
+        if (profile.getVerificationStatus() != VerificationStatus.VERIFIED) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Your profile is not verified. You cannot accept jobs.");
+        }
+
+        // Issue #4 — mechanic must be online
+        if (!profile.getIsAvailable()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "You are marked as unavailable. Go online before accepting jobs.");
+        }
+
+        // Fetch job — must be PENDING to be assignable
+        Job job = jobRepository.findByIdAndStatus(jobId, JobStatus.PENDING)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Job is no longer available"));
+
+        // Issue #6 — set mechanicProfileId (was always null before)
+        job.setMechanicProfileId(profile.getId());
+        job.setStatus(JobStatus.ACCEPTED);
+
+        return toDto(jobRepository.save(job));
+    }
+
     // ── Status Transitions ─────────────────────────────────────────────────────
 
-    // Enforces: PENDING → CANCELLED (only by the job owner)
+    // Issue #8 — fixed cancel rules
+    // PENDING → CANCELLED : free, no questions asked
+    // ACCEPTED → CANCELLED : allowed (frontend warns the user first)
+    // IN_PROGRESS → CANCELLED : blocked, work has already started
     public JobResponseDto cancelJob(Long jobId, Long accountId) {
         Job job = findJobOrThrow(jobId);
 
         if (!job.getAccountId().equals(accountId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You don't own this job");
         }
-        if (job.getStatus() != JobStatus.PENDING) {
+
+        if (job.getStatus() == JobStatus.IN_PROGRESS) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Only PENDING jobs can be cancelled");
+                    "Cannot cancel a job that is already in progress");
+        }
+
+        if (job.getStatus() == JobStatus.COMPLETED || job.getStatus() == JobStatus.CANCELLED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Job is already " + job.getStatus());
         }
 
         job.setStatus(JobStatus.CANCELLED);
         return toDto(jobRepository.save(job));
     }
 
-    // Enforces: PENDING → ACCEPTED → IN_PROGRESS → COMPLETED
-    public JobResponseDto updateStatus(Long jobId, JobStatus newStatus) {
+    // Issue #11 — mechanic ownership check added
+    // Only the assigned mechanic can push status forward
+    public JobResponseDto updateStatus(Long jobId, Long accountId, JobStatus newStatus) {
         Job job = findJobOrThrow(jobId);
-        JobStatus current = job.getStatus();
 
+        // Resolve the calling mechanic's profile
+        MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "No mechanic profile found"));
+
+        // Mechanic must own this job
+        if (!profile.getId().equals(job.getMechanicProfileId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "You are not assigned to this job");
+        }
+
+        JobStatus current = job.getStatus();
         boolean valid = switch (current) {
-            case PENDING -> newStatus == JobStatus.ACCEPTED;
             case ACCEPTED -> newStatus == JobStatus.IN_PROGRESS;
             case IN_PROGRESS -> newStatus == JobStatus.COMPLETED;
             default -> false;

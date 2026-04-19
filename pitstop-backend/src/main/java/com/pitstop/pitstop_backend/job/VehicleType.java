@@ -1,5 +1,8 @@
 package com.pitstop.pitstop_backend.job;
 
 public enum VehicleType {
-    CAR, BIKE, OTHER
+    TWO_WHEELER,
+    THREE_WHEELER,
+    FOUR_WHEELER,
+    SIX_PLUS_WHEELER
 }

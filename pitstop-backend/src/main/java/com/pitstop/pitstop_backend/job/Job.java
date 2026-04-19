@@ -1,8 +1,5 @@
 package com.pitstop.pitstop_backend.job;
 
-
-import com.pitstop.pitstop_backend.mechanic.Mechanic;
-import com.pitstop.pitstop_backend.user.User;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
@@ -15,11 +12,9 @@ public class Job {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // References accounts.id - always set from JWT, never from request body
     @Column(name = "account_id", nullable = false)
     private Long accountId;
 
-    // Reference mechanic_profile.id - null until a mechanic accepts the job
     @Column(name = "mechanic_profile_id", nullable = true)
     private Long mechanicProfileId;
 
@@ -32,6 +27,22 @@ public class Job {
 
     @Enumerated(EnumType.STRING)
     private ProblemType problemType;
+
+    // Required — user tells us what vehicle it is (e.g. "Honda Activa")
+    @Column(nullable = false)
+    private String vehicleName;
+
+    // Cloudinary URL — set after photo upload, nullable (photo is optional)
+    @Column(nullable = true)
+    private String photoUrl;
+
+    // Tracks which broadcast ring is currently active (1-4). Starts at 1.
+    @Column(nullable = false)
+    private Integer broadcastRing = 1;
+
+    // When the current broadcast ring started — scheduler uses this to check 2 min timeout
+    @Column(nullable = true)
+    private LocalDateTime broadcastStartedAt;
 
     private String address;
     private String description;
@@ -56,99 +67,50 @@ public class Job {
         updatedAt = LocalDateTime.now();
     }
 
-    public Long getId() {
-        return id;
-    }
+    public Long getId() { return id; }
 
-    public Long getAccountId() {
-        return accountId;
-    }
+    public Long getAccountId() { return accountId; }
+    public void setAccountId(Long accountId) { this.accountId = accountId; }
 
-    public void setAccountId(Long accountId) {
-        this.accountId = accountId;
-    }
+    public Long getMechanicProfileId() { return mechanicProfileId; }
+    public void setMechanicProfileId(Long mechanicProfileId) { this.mechanicProfileId = mechanicProfileId; }
 
-    public Long getMechanicProfileId() {
-        return mechanicProfileId;
-    }
+    public JobStatus getStatus() { return status; }
+    public void setStatus(JobStatus status) { this.status = status; }
 
-    public void setMechanicProfileId(Long mechanicProfileId) {
-        this.mechanicProfileId = mechanicProfileId;
-    }
+    public VehicleType getVehicleType() { return vehicleType; }
+    public void setVehicleType(VehicleType vehicleType) { this.vehicleType = vehicleType; }
 
-    public JobStatus getStatus() {
-        return status;
-    }
+    public ProblemType getProblemType() { return problemType; }
+    public void setProblemType(ProblemType problemType) { this.problemType = problemType; }
 
-    public void setStatus(JobStatus status) {
-        this.status = status;
-    }
+    public String getVehicleName() { return vehicleName; }
+    public void setVehicleName(String vehicleName) { this.vehicleName = vehicleName; }
 
-    public VehicleType getVehicleType() {
-        return vehicleType;
-    }
+    public String getPhotoUrl() { return photoUrl; }
+    public void setPhotoUrl(String photoUrl) { this.photoUrl = photoUrl; }
 
-    public void setVehicleType(VehicleType vehicleType) {
-        this.vehicleType = vehicleType;
-    }
+    public Integer getBroadcastRing() { return broadcastRing; }
+    public void setBroadcastRing(Integer broadcastRing) { this.broadcastRing = broadcastRing; }
 
-    public ProblemType getProblemType() {
-        return problemType;
-    }
+    public LocalDateTime getBroadcastStartedAt() { return broadcastStartedAt; }
+    public void setBroadcastStartedAt(LocalDateTime broadcastStartedAt) { this.broadcastStartedAt = broadcastStartedAt; }
 
-    public void setProblemType(ProblemType problemType) {
-        this.problemType = problemType;
-    }
+    public String getAddress() { return address; }
+    public void setAddress(String address) { this.address = address; }
 
-    public String getAddress() {
-        return address;
-    }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
 
-    public void setAddress(String address) {
-        this.address = address;
-    }
+    public Double getLatitude() { return latitude; }
+    public void setLatitude(Double latitude) { this.latitude = latitude; }
 
-    public String getDescription() {
-        return description;
-    }
+    public Double getLongitude() { return longitude; }
+    public void setLongitude(Double longitude) { this.longitude = longitude; }
 
-    public void setDescription(String description) {
-        this.description = description;
-    }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
-    public Double getLatitude() {
-        return latitude;
-    }
-
-    public void setLatitude(Double latitude) {
-        this.latitude = latitude;
-    }
-
-    public Double getLongitude() {
-        return longitude;
-    }
-
-    public void setLongitude(Double longitude) {
-        this.longitude = longitude;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
-    }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 }
-
-
-
-

@@ -1,7 +1,7 @@
 package com.pitstop.pitstop_backend.account;
 
-
 import jakarta.persistence.*;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "mechanic_profile")
@@ -12,14 +12,13 @@ public class MechanicProfile {
     private Long id;
 
     @OneToOne
-    @JoinColumn(name ="account_id", nullable = false, unique = true)
+    @JoinColumn(name = "account_id", nullable = false, unique = true)
     private Account account;
 
     @Column(nullable = false)
     private String phone;
 
-    @Column(nullable = false)
-    private String expertise;
+    // expertise String field removed — replaced by mechanic_expertise table
 
     @Column(nullable = false)
     private Double serviceRadiusKm;
@@ -31,65 +30,90 @@ public class MechanicProfile {
     @Column(nullable = false)
     private Boolean isAvailable;
 
+    // Total jobs successfully completed by this mechanic
+    @Column(nullable = false)
+    private Integer totalJobsCompleted = 0;
+
+    // How many times this mechanic cancelled mid-job — shown on trust profile if > 0
+    @Column(nullable = false)
+    private Integer midJobCancels = 0;
+
+    // Set when mechanic is suspended — null means not suspended
+    @Column(nullable = true)
+    private LocalDateTime suspensionEndsAt;
+
+    // Tracks appeal state for current suspension
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private AppealStatus appealStatus;
+
+    // Text of the mechanic's appeal submission
+    @Column(nullable = true)
+    private String appealReason;
+
+    // Updated every 30s by frontend ping during active job — used by heartbeat scheduler
+    @Column(nullable = true)
+    private LocalDateTime lastHeartbeatAt;
+
+    // Reason shown to mechanic on rejection screen — set by admin on reject
+    @Column(nullable = true)
+    private String rejectionReason;
+
     @PrePersist
-    protected void onCreate(){
-        this.verificationStatus = VerificationStatus.UNVERIFIED;
-        this.isAvailable = false;
+    protected void onCreate() {
+        if (this.verificationStatus == null) {
+            this.verificationStatus = VerificationStatus.UNVERIFIED;
+        }
+        if (this.isAvailable == null) {
+            this.isAvailable = false;
+        }
+        if (this.totalJobsCompleted == null) {
+            this.totalJobsCompleted = 0;
+        }
+        if (this.midJobCancels == null) {
+            this.midJobCancels = 0;
+        }
+        if (this.appealStatus == null) {
+            this.appealStatus = AppealStatus.NONE;
+        }
     }
 
-    public Long getId() {
-        return id;
-    }
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+    public Account getAccount() { return account; }
+    public void setAccount(Account account) { this.account = account; }
 
-    public Account getAccount() {
-        return account;
-    }
+    public String getPhone() { return phone; }
+    public void setPhone(String phone) { this.phone = phone; }
 
-    public void setAccount(Account account) {
-        this.account = account;
-    }
+    public Double getServiceRadiusKm() { return serviceRadiusKm; }
+    public void setServiceRadiusKm(Double serviceRadiusKm) { this.serviceRadiusKm = serviceRadiusKm; }
 
-    public String getPhone() {
-        return phone;
-    }
+    public VerificationStatus getVerificationStatus() { return verificationStatus; }
+    public void setVerificationStatus(VerificationStatus verificationStatus) { this.verificationStatus = verificationStatus; }
 
-    public void setPhone(String phone) {
-        this.phone = phone;
-    }
+    public Boolean getIsAvailable() { return isAvailable; }
+    public void setIsAvailable(Boolean isAvailable) { this.isAvailable = isAvailable; }
 
-    public String getExpertise() {
-        return expertise;
-    }
+    public Integer getTotalJobsCompleted() { return totalJobsCompleted; }
+    public void setTotalJobsCompleted(Integer totalJobsCompleted) { this.totalJobsCompleted = totalJobsCompleted; }
 
-    public void setExpertise(String expertise) {
-        this.expertise = expertise;
-    }
+    public Integer getMidJobCancels() { return midJobCancels; }
+    public void setMidJobCancels(Integer midJobCancels) { this.midJobCancels = midJobCancels; }
 
-    public Double getServiceRadiusKm() {
-        return serviceRadiusKm;
-    }
+    public LocalDateTime getSuspensionEndsAt() { return suspensionEndsAt; }
+    public void setSuspensionEndsAt(LocalDateTime suspensionEndsAt) { this.suspensionEndsAt = suspensionEndsAt; }
 
-    public void setServiceRadiusKm(Double serviceRadiusKm) {
-        this.serviceRadiusKm = serviceRadiusKm;
-    }
+    public AppealStatus getAppealStatus() { return appealStatus; }
+    public void setAppealStatus(AppealStatus appealStatus) { this.appealStatus = appealStatus; }
 
-    public VerificationStatus getVerificationStatus() {
-        return verificationStatus;
-    }
+    public String getAppealReason() { return appealReason; }
+    public void setAppealReason(String appealReason) { this.appealReason = appealReason; }
 
-    public void setVerificationStatus(VerificationStatus verificationStatus) {
-        this.verificationStatus = verificationStatus;
-    }
+    public LocalDateTime getLastHeartbeatAt() { return lastHeartbeatAt; }
+    public void setLastHeartbeatAt(LocalDateTime lastHeartbeatAt) { this.lastHeartbeatAt = lastHeartbeatAt; }
 
-    public Boolean getIsAvailable() {
-        return isAvailable;
-    }
-
-    public void setIsAvailable(Boolean isAvailable) {
-        this.isAvailable= isAvailable;
-    }
+    public String getRejectionReason() { return rejectionReason; }
+    public void setRejectionReason(String rejectionReason) { this.rejectionReason = rejectionReason; }
 }
