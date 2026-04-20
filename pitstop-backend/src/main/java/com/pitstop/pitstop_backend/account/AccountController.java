@@ -90,6 +90,15 @@ public class AccountController {
         return ResponseEntity.ok(accountService.getMe(accountId));
     }
 
+    // PATCH /api/accounts/expertise — MECHANIC only (SecurityConfig)
+    // Replaces all expertise rows for this mechanic with the new selection.
+    @PatchMapping("/accounts/expertise")
+    public ResponseEntity<Void> updateExpertise(@Valid @RequestBody ExpertiseRequest request) {
+        Long accountId = getAccountId();
+        accountService.updateExpertise(accountId, request);
+        return ResponseEntity.noContent().build();
+    }
+
     private Long getAccountId() {
         return (Long) SecurityContextHolder.getContext()
                 .getAuthentication().getPrincipal();

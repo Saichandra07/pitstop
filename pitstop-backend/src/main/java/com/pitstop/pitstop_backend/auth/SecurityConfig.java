@@ -55,6 +55,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/api/jobs/*/status").hasRole("MECHANIC")
                         // Availability toggle
                         .requestMatchers(HttpMethod.PATCH, "/api/accounts/availability").hasRole("MECHANIC")
+                        // Restricts PATCH requests to /api/accounts/expertise to users with the MECHANIC role.
+                        .requestMatchers(HttpMethod.PATCH, "/api/accounts/expertise").hasRole("MECHANIC")
 
                         // ── USER only ───────────────────────────────────────────────
                         // Submit SOS

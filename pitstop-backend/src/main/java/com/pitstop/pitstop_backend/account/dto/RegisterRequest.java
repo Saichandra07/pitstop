@@ -1,3 +1,4 @@
+// account/dto/RegisterRequest.java
 package com.pitstop.pitstop_backend.account.dto;
 
 import com.pitstop.pitstop_backend.account.Role;
@@ -7,6 +8,7 @@ public record RegisterRequest(
         String email,
         String password,
         Role role,
-        String phone,           // only required if role = MECHANIC, validated in service
-        Double serviceRadiusKm  // only required if role = MECHANIC
+        String phone,
+        Double serviceRadiusKm,
+        ExpertiseRequest expertise  // null for USER, required for MECHANIC — validated in service
 ) {}

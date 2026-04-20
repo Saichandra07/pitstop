@@ -7,6 +7,8 @@ import DashboardPage from './pages/DashboardPage';
 import MechanicDashboardPage from './pages/MechanicDashboardPage';
 import HistoryPage from './pages/HistoryPage';
 import AdminDashboardPage from "./pages/AdminDashboardPage";
+import VehicleOnboardingPage from "./pages/VehicleOnboardingPage";
+import ProblemsOnboardingPage from "./pages/ProblemsOnboardingPage";
 
 function App() {
   return (
@@ -34,6 +36,18 @@ function App() {
         <Route path="/mechanic/dashboard" element={
           <ProtectedRoute allowedRoles={['MECHANIC']}>
             <MechanicDashboardPage />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/mechanic/onboarding/vehicles" element={
+          <ProtectedRoute allowedRoles={["MECHANIC"]}>
+            <VehicleOnboardingPage />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/mechanic/onboarding/problems" element={
+          <ProtectedRoute allowedRoles={["MECHANIC"]}>
+            <ProblemsOnboardingPage />
           </ProtectedRoute>
         } />
 

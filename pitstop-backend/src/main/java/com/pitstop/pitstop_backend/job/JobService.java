@@ -1,5 +1,6 @@
 package com.pitstop.pitstop_backend.job;
 
+import com.pitstop.pitstop_backend.account.MechanicExpertiseRepository;
 import com.pitstop.pitstop_backend.account.MechanicProfile;
 import com.pitstop.pitstop_backend.account.MechanicProfileRepository;
 import com.pitstop.pitstop_backend.account.VerificationStatus;
@@ -19,11 +20,15 @@ public class JobService {
 
     private final JobRepository jobRepository;
     private final MechanicProfileRepository mechanicProfileRepository;
+    private final MechanicExpertiseRepository mechanicExpertiseRepository;
 
     public JobService(JobRepository jobRepository,
-                      MechanicProfileRepository mechanicProfileRepository) {
+                      MechanicProfileRepository mechanicProfileRepository,
+                      MechanicExpertiseRepository mechanicExpertiseRepository
+                      ) {
         this.jobRepository = jobRepository;
         this.mechanicProfileRepository = mechanicProfileRepository;
+        this.mechanicExpertiseRepository = mechanicExpertiseRepository;
     }
 
     // ── Mapping ────────────────────────────────────────────────────────────────
@@ -117,7 +122,15 @@ public class JobService {
         }
 
         return jobRepository.findByStatus(JobStatus.PENDING)
-                .stream().map(this::toDto).collect(Collectors.toList());
+                .stream()
+                .filter(job -> mechanicExpertiseRepository
+                        .existsByMechanicProfileIdAndWheelerTypeAndProblemType(
+                                profile.getId(),
+                                job.getVehicleType(),
+                                job.getProblemType()
+                        ))
+                .map(this::toDto)
+                .collect(Collectors.toList());
     }
 
     public List<JobResponseDto> getJobsByMechanic(Long mechanicProfileId) {

@@ -3,6 +3,7 @@ package com.pitstop.pitstop_backend.account;
 import com.pitstop.pitstop_backend.account.dto.*;
 import com.pitstop.pitstop_backend.auth.JwtUtil;
 import com.pitstop.pitstop_backend.common.dto.LoginResponse;
+import com.pitstop.pitstop_backend.job.ProblemType;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -20,63 +21,83 @@ public class AccountService {
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
     private final RejectionReasonRepository rejectionReasonRepository;
+    private final MechanicExpertiseRepository mechanicExpertiseRepository;
 
     public AccountService (AccountRepository accountRepository,
                            MechanicProfileRepository mechanicProfileRepository,
                            JwtUtil jwtUtil,
                            PasswordEncoder passwordEncoder,
-                           RejectionReasonRepository rejectionReasonRepository
+                           RejectionReasonRepository rejectionReasonRepository,
+                           MechanicExpertiseRepository mechanicExpertiseRepository
                            ){
         this.accountRepository = accountRepository;
         this.mechanicProfileRepository = mechanicProfileRepository;
         this.jwtUtil = jwtUtil;
         this.passwordEncoder = passwordEncoder;
         this.rejectionReasonRepository = rejectionReasonRepository;
+        this.mechanicExpertiseRepository = mechanicExpertiseRepository;
+
 
     }
-    public LoginResponse register(RegisterRequest request){
+    public LoginResponse register(RegisterRequest request) {
 
-        //reject duplicate emails before doing anything else
-        if(accountRepository.existsByEmail(request.email())){
+        if (accountRepository.existsByEmail(request.email())) {
             throw new RuntimeException("Email already registered");
         }
 
-        // validate mechanic-specific fields are present if role is MECHANIC
-        // we don't do this with @Valid because the fields are conditionally required
-        if(request.role()==Role.MECHANIC){
-            if (request.phone() == null || request.phone().isBlank()){
+        if (request.role() == Role.MECHANIC) {
+            if (request.phone() == null || request.phone().isBlank()) {
                 throw new RuntimeException("Phone number is required for mechanic registration");
             }
-            if (request.serviceRadiusKm()==null){
+            if (request.serviceRadiusKm() == null) {
                 throw new RuntimeException("Service radius is required for mechanic");
             }
         }
-        //build and save the account - same for both roles
+
         Account account = new Account();
         account.setEmail(request.email());
         account.setName(request.name());
         account.setPasswordHash(passwordEncoder.encode(request.password()));
         account.setRole(request.role());
 
-        //upgradeStatus left null- no upgrade requested yet
+        Account saved = accountRepository.save(account);
 
-        Account saved  = accountRepository.save(account);
-
-        //if MECHANIC - create the profile row linked to this account
-        //verificationStatus and isAvailable are set by @PrePersist - we don't set them here
-        if(request.role() == Role.MECHANIC){
+        if (request.role() == Role.MECHANIC) {
             MechanicProfile profile = new MechanicProfile();
             profile.setAccount(saved);
             profile.setPhone(request.phone());
             profile.setServiceRadiusKm(request.serviceRadiusKm());
             profile.setVerificationStatus(VerificationStatus.PENDING);
             mechanicProfileRepository.save(profile);
+            // expertise saved separately via PATCH /accounts/expertise in onboarding step 3
         }
-        // issue JWT with accountId and role baked in
+
         String token = jwtUtil.generateToken(saved.getEmail(), saved.getId(), saved.getRole());
         VerificationStatus verificationStatus = request.role() == Role.MECHANIC
                 ? VerificationStatus.PENDING : null;
-        return new LoginResponse(token, saved.getId(), saved.getName(), saved.getEmail(), saved.getRole(), verificationStatus);    }
+        return new LoginResponse(token, saved.getId(), saved.getName(), saved.getEmail(), saved.getRole(), verificationStatus);
+    }
+
+    // Reusable — called from register() and setExpertise()
+    private void saveExpertiseRows(Long mechanicProfileId, ExpertiseRequest expertiseRequest) {
+        for (ExpertiseRequest.WheelerExpertise entry : expertiseRequest.expertise()) {
+            for (ProblemType problem : entry.problemTypes()) {
+                MechanicExpertise expertise = new MechanicExpertise();
+                expertise.setMechanicProfileId(mechanicProfileId);
+                expertise.setWheelerType(entry.wheelerType());
+                expertise.setProblemType(problem);
+                // jobsCompleted defaults to 0 in the entity — no need to set it
+                mechanicExpertiseRepository.save(expertise);
+            }
+        }
+    }
+
+    // Called from PATCH /accounts/expertise
+    public void setExpertise(Long mechanicProfileId, ExpertiseRequest request) {
+        // Wipe all existing rows for this mechanic, then re-insert clean
+        mechanicExpertiseRepository.deleteAllByMechanicProfileId(mechanicProfileId);
+        saveExpertiseRows(mechanicProfileId, request);
+    }
 
     public LoginResponse login (LoginRequest request){
         // fetch account by email — if not found, don't reveal whether email exists
@@ -200,6 +221,13 @@ public class AccountService {
         rejectionReasonRepository.deleteById(id);
     }
 
+    // Called from PATCH /accounts/expertise
+    public void updateExpertise(Long accountId, ExpertiseRequest request) {
+        MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)
+                .orElseThrow(() -> new RuntimeException("Mechanic profile not found"));
+        setExpertise(profile.getId(), request);
+    }
+
     public AccountMeResponse getMe(Long accountId) {
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
@@ -208,6 +236,10 @@ public class AccountService {
             MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Mechanic profile not found"));
 
+            // Check if this mechanic has completed expertise selection
+            boolean hasExpertise = mechanicExpertiseRepository
+                    .existsByMechanicProfileId(profile.getId());
+
             return new AccountMeResponse(
                     account.getId(),
                     account.getName(),
@@ -215,17 +247,17 @@ public class AccountService {
                     account.getRole().name(),
                     profile.getVerificationStatus(),
                     profile.getIsAvailable(),
-                    profile.getRejectionReason()
+                    profile.getRejectionReason(),
+                    hasExpertise
             );
         }
+
         return new AccountMeResponse(
                 account.getId(),
                 account.getName(),
                 account.getEmail(),
                 account.getRole().name(),
-                null,
-                null,
-                null
+                null, null, null, null  // USER — no mechanic fields
         );
     }
 

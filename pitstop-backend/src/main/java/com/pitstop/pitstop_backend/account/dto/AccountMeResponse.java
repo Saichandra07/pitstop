@@ -8,13 +8,15 @@ public class AccountMeResponse {
     private String name;
     private String email;
     private String role;
-    private VerificationStatus verificationStatus; // null for USER
-    private Boolean isAvailable;                   // null for USER
-    private String rejectionReason;                // null unless REJECTED
+    private VerificationStatus verificationStatus;
+    private Boolean isAvailable;
+    private String rejectionReason;
+    private Boolean hasExpertise;  // null for USER, true/false for MECHANIC
 
     public AccountMeResponse(Long id, String name, String email, String role,
                              VerificationStatus verificationStatus,
-                             Boolean isAvailable, String rejectionReason) {
+                             Boolean isAvailable, String rejectionReason,
+                             Boolean hasExpertise) {
         this.id = id;
         this.name = name;
         this.email = email;
@@ -22,6 +24,7 @@ public class AccountMeResponse {
         this.verificationStatus = verificationStatus;
         this.isAvailable = isAvailable;
         this.rejectionReason = rejectionReason;
+        this.hasExpertise = hasExpertise;
     }
 
     public Long getId() { return id; }
@@ -31,4 +34,5 @@ public class AccountMeResponse {
     public VerificationStatus getVerificationStatus() { return verificationStatus; }
     public Boolean getIsAvailable() { return isAvailable; }
     public String getRejectionReason() { return rejectionReason; }
+    public Boolean getHasExpertise() { return hasExpertise; }
 }
