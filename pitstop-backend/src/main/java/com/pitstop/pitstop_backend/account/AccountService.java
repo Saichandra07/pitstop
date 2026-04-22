@@ -11,7 +11,10 @@ import org.springframework.web.server.ResponseStatusException;
 import com.pitstop.pitstop_backend.account.dto.MechanicPendingResponse;
 import com.pitstop.pitstop_backend.account.dto.VerifyMechanicRequest;
 import com.pitstop.pitstop_backend.account.RejectionReason;
+
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 
 @Service
@@ -22,23 +25,32 @@ public class AccountService {
     private final PasswordEncoder passwordEncoder;
     private final RejectionReasonRepository rejectionReasonRepository;
     private final MechanicExpertiseRepository mechanicExpertiseRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
+    private final EmailVerificationTokenRepository emailVerificationTokenRepository;
+    private final EmailService emailService;
 
-    public AccountService (AccountRepository accountRepository,
-                           MechanicProfileRepository mechanicProfileRepository,
-                           JwtUtil jwtUtil,
-                           PasswordEncoder passwordEncoder,
-                           RejectionReasonRepository rejectionReasonRepository,
-                           MechanicExpertiseRepository mechanicExpertiseRepository
-                           ){
+    public AccountService(
+            AccountRepository accountRepository,
+            PasswordEncoder passwordEncoder,
+            JwtUtil jwtUtil,
+            MechanicProfileRepository mechanicProfileRepository,
+            MechanicExpertiseRepository mechanicExpertiseRepository,
+            RejectionReasonRepository rejectionReasonRepository,
+            PasswordResetTokenRepository passwordResetTokenRepository,
+            EmailVerificationTokenRepository emailVerificationTokenRepository,
+            EmailService emailService) {
         this.accountRepository = accountRepository;
-        this.mechanicProfileRepository = mechanicProfileRepository;
-        this.jwtUtil = jwtUtil;
         this.passwordEncoder = passwordEncoder;
-        this.rejectionReasonRepository = rejectionReasonRepository;
+        this.jwtUtil = jwtUtil;
+        this.mechanicProfileRepository = mechanicProfileRepository;
         this.mechanicExpertiseRepository = mechanicExpertiseRepository;
-
-
+        this.rejectionReasonRepository = rejectionReasonRepository;
+        this.passwordResetTokenRepository = passwordResetTokenRepository;
+        this.emailVerificationTokenRepository = emailVerificationTokenRepository;
+        this.emailService = emailService;
     }
+
+
     public LoginResponse register(RegisterRequest request) {
 
         if (accountRepository.existsByEmail(request.email())) {
@@ -61,6 +73,7 @@ public class AccountService {
         account.setRole(request.role());
 
         Account saved = accountRepository.save(account);
+        sendVerificationEmail(saved.getId(), saved.getEmail());
 
         if (request.role() == Role.MECHANIC) {
             MechanicProfile profile = new MechanicProfile();
@@ -259,6 +272,85 @@ public class AccountService {
                 account.getRole().name(),
                 null, null, null, null  // USER — no mechanic fields
         );
+    }
+
+    public void forgotPassword(String email) {
+        Account account = accountRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No account found with that email"));
+
+        passwordResetTokenRepository.deleteAllByAccountId(account.getId());
+
+        String token = UUID.randomUUID().toString();
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(15);
+        passwordResetTokenRepository.save(new PasswordResetToken(token, account.getId(), expiresAt));
+
+        emailService.sendPasswordResetEmail(email, token);
+    }
+
+    public LoginResponse resetPassword(String token, String newPassword) {
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(token)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or expired reset link"));
+
+        if (resetToken.isUsed()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This reset link has already been used");
+        }
+        if (resetToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reset link has expired. Please request a new one");
+        }
+
+        Account account = accountRepository.findById(resetToken.getAccountId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
+
+        account.setPasswordHash(passwordEncoder.encode(newPassword));
+        accountRepository.save(account);
+
+        resetToken.setUsed(true);
+        passwordResetTokenRepository.save(resetToken);
+
+        String jwt = jwtUtil.generateToken(account.getEmail(), account.getId(), account.getRole());
+        MechanicProfile profile = account.getRole() == Role.MECHANIC
+                ? mechanicProfileRepository.findByAccountId(account.getId()).orElse(null)
+                : null;
+        VerificationStatus vs = profile != null ? profile.getVerificationStatus() : null;
+        return new LoginResponse(jwt, account.getId(), account.getName(), account.getEmail(), account.getRole(), vs);
+    }
+
+    public void sendVerificationEmail(Long accountId, String email) {
+        emailVerificationTokenRepository.deleteAllByAccountId(accountId);
+
+        String token = UUID.randomUUID().toString();
+        LocalDateTime expiresAt = LocalDateTime.now().plusHours(24);
+        emailVerificationTokenRepository.save(new EmailVerificationToken(token, accountId, email, expiresAt));
+
+        emailService.sendVerificationEmail(email, token);
+    }
+
+    public LoginResponse verifyEmail(String token) {
+        EmailVerificationToken verificationToken = emailVerificationTokenRepository.findByToken(token)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or expired verification link"));
+
+        if (verificationToken.isUsed()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This verification link has already been used");
+        }
+        if (verificationToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Verification link has expired. Please request a new one");
+        }
+
+        Account account = accountRepository.findById(verificationToken.getAccountId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
+
+        account.setEmailVerified(true);
+        accountRepository.save(account);
+
+        verificationToken.setUsed(true);
+        emailVerificationTokenRepository.save(verificationToken);
+
+        String jwt = jwtUtil.generateToken(account.getEmail(), account.getId(), account.getRole());
+        MechanicProfile profile = account.getRole() == Role.MECHANIC
+                ? mechanicProfileRepository.findByAccountId(account.getId()).orElse(null)
+                : null;
+        VerificationStatus vs = profile != null ? profile.getVerificationStatus() : null;
+        return new LoginResponse(jwt, account.getId(), account.getName(), account.getEmail(), account.getRole(), vs);
     }
 
 }

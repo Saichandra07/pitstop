@@ -1,139 +1,99 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import axios from "../api/axios";
 import { useAuth } from "../context/AuthContext";
-import api from "../api/axios";
 
 export default function LoginPage() {
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const [error, setError] = useState("");
-    const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const { login } = useAuth();
+  const [form, setForm] = useState({ email: "", password: "" });
+  const [errors, setErrors] = useState({});
+  const [globalError, setGlobalError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-    const { login } = useAuth();
-    const navigate = useNavigate();
+  const validate = () => {
+    const e = {};
+    if (!form.email.trim()) e.email = "Email is required";
+    else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = "Enter a valid email";
+    if (!form.password) e.password = "Password is required";
+    return e;
+  };
 
-    const handleSubmit = async () => {
-        setError("");
-        if (!email || !password) { setError("All fields are required."); return; }
+  const handleSubmit = async () => {
+    const e = validate();
+    if (Object.keys(e).length) { setErrors(e); return; }
+    setErrors({}); setGlobalError(""); setLoading(true);
+    try {
+      const res = await axios.post("/auth/login", form);
+      login(res.data);
+      const { role } = res.data;
+      if (role === "ADMIN") { navigate("/admin/dashboard"); return; }
+      if (role === "MECHANIC") {
+        const me = await axios.get("/accounts/me");
+        navigate(me.data.hasExpertise ? "/mechanic/dashboard" : "/mechanic/onboarding/vehicles");
+        return;
+      }
+      navigate("/dashboard");
+    } catch (err) {
+      setGlobalError(err.response?.data?.message || "Invalid email or password");
+    } finally { setLoading(false); }
+  };
 
-        try {
-            setLoading(true);
-            const res = await api.post("/auth/login", { email, password });
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
-            login(res.data.token, {
-                id: res.data.id,
-                name: res.data.name,
-                email: res.data.email,
-                role: res.data.role,
-                verificationStatus: res.data.verificationStatus
-            });
-
-            const role = res.data.role;
-
-            if (role === "ADMIN") {
-                navigate("/admin/dashboard");
-                return;
-            }
-
-            if (role === "USER") {
-                navigate("/dashboard");
-                return;
-            }
-
-            if (role === "MECHANIC") {
-                // Check if mechanic has completed expertise onboarding
-                const meRes = await api.get("/accounts/me");
-                if (!meRes.data.hasExpertise) {
-                    navigate("/mechanic/onboarding/vehicles");
-                } else {
-                    navigate("/mechanic/dashboard");
-                }
-            }
-
-        } catch (err) {
-            setError("Invalid email or password.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <div style={styles.page}>
-            <div style={styles.card}>
-                <div style={styles.header}>
-                    <div style={styles.logo}>⚡ PitStop</div>
-                    <h1 style={styles.title}>Welcome back</h1>
-                    <p style={styles.subtitle}>Sign in to your account</p>
-                </div>
-
-                {error && <div style={styles.error}>{error}</div>}
-
-                <input
-                    style={styles.input}
-                    type="email"
-                    placeholder="Email address"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                />
-                <input
-                    style={styles.input}
-                    type="password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                />
-
-                <button
-                    style={{ ...styles.btn, ...(loading ? styles.btnDisabled : {}) }}
-                    onClick={handleSubmit}
-                    disabled={loading}
-                >
-                    {loading ? "Signing in..." : "Sign In"}
-                </button>
-
-                <p style={styles.footer}>
-                    Don't have an account?{" "}
-                    <Link to="/register" style={styles.link}>Register here</Link>
-                </p>
-                <p style={styles.footer}>
-                    Are you a mechanic?{" "}
-                    <Link to="/register/mechanic" style={styles.link}>Join as mechanic</Link>
-                </p>
-            </div>
+  return (
+    <div className="ps-page">
+      <div className="ps-logo">
+        <div className="ps-logo-mark">
+          <div className="ps-logo-icon">🔧</div>
+          <span className="ps-logo-text">PitStop</span>
         </div>
-    );
-}
+        <div className="ps-logo-sub">On-demand roadside mechanics</div>
+      </div>
 
-const styles = {
-    page: {
-        minHeight: "100vh", background: "#141414",
-        display: "flex", justifyContent: "center", alignItems: "center",
-        padding: "24px 16px"
-    },
-    card: {
-        width: "100%", maxWidth: "400px",
-        background: "#1a1a1a", borderRadius: "16px", padding: "36px 24px"
-    },
-    header: { textAlign: "center", marginBottom: "28px" },
-    logo: { color: "#E63946", fontSize: "20px", fontWeight: "700", marginBottom: "12px" },
-    title: { color: "#fff", fontSize: "26px", fontWeight: "700", margin: "0 0 8px" },
-    subtitle: { color: "#888", fontSize: "14px", margin: 0 },
-    error: {
-        background: "#2a1518", border: "1px solid #E63946",
-        borderRadius: "8px", padding: "12px", color: "#E63946",
-        fontSize: "14px", marginBottom: "16px"
-    },
-    input: {
-        width: "100%", background: "#242424", border: "1px solid #2a2a2a",
-        borderRadius: "10px", padding: "13px 14px", color: "#fff",
-        fontSize: "15px", marginBottom: "12px", boxSizing: "border-box", outline: "none"
-    },
-    btn: {
-        width: "100%", background: "#E63946", border: "none",
-        borderRadius: "12px", padding: "15px", color: "#fff",
-        fontSize: "16px", fontWeight: "700", cursor: "pointer", marginTop: "4px"
-    },
-    btnDisabled: { opacity: 0.6, cursor: "not-allowed" },
-    footer: { textAlign: "center", color: "#666", fontSize: "14px", marginTop: "16px" },
-    link: { color: "#E63946", textDecoration: "none" }
-};
+      <div className="ps-card">
+        <div className="ps-card-title">Welcome back</div>
+        <div className="ps-card-sub">Sign in to your account</div>
+
+        {globalError && <div className="ps-alert-error">{globalError}</div>}
+
+        <div className="ps-field">
+          <label className="ps-label">Email</label>
+          <input className={`ps-input${errors.email ? " error" : ""}`} type="email"
+            placeholder="you@example.com" value={form.email} onChange={set("email")}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
+          {errors.email && <div className="ps-input-error">{errors.email}</div>}
+        </div>
+
+        <div className="ps-field" style={{ marginBottom: "6px" }}>
+          <label className="ps-label">Password</label>
+          <input className={`ps-input${errors.password ? " error" : ""}`} type="password"
+            placeholder="••••••••" value={form.password} onChange={set("password")}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
+          {errors.password && <div className="ps-input-error">{errors.password}</div>}
+        </div>
+
+<div style={{ textAlign: "center", marginBottom: "20px" }}>
+  <Link to="/forgot-password" className="ps-link" style={{ fontSize: "12px" }}>Forgot password?</Link>
+</div>
+
+        <button className="ps-btn" onClick={handleSubmit} disabled={loading}>
+          {loading ? "Signing in..." : "Sign in"}
+        </button>
+
+        <div className="ps-divider">
+          <div className="ps-divider-line" /><span className="ps-divider-text">OR</span><div className="ps-divider-line" />
+        </div>
+
+        <Link to="/register" style={{ display: "block", textAlign: "center", fontSize: "13px", color: "#888", textDecoration: "none" }}>
+          Don't have an account? <span className="ps-link">Create one</span>
+        </Link>
+      </div>
+
+      <div className="ps-spacer" />
+      <Link to="/register/mechanic" style={{ fontSize: "12px", color: "#555", textDecoration: "none" }}>
+        Are you a mechanic? <span className="ps-link-yellow">Join as a mechanic →</span>
+      </Link>
+    </div>
+  );
+}

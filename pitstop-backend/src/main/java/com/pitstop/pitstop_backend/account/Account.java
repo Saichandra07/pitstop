@@ -40,6 +40,9 @@ public class Account {
     @Column(nullable = false)
     private Boolean isBanned = false;
 
+    @Column(nullable = false)
+    private boolean emailVerified = false;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -76,6 +79,13 @@ public class Account {
 
     public Boolean getIsBanned() { return isBanned; }
     public void setIsBanned(Boolean isBanned) { this.isBanned = isBanned; }
+
+    public boolean isEmailVerified() {
+        return emailVerified;
+    }
+    public void setEmailVerified(boolean emailVerified) {
+        this.emailVerified = emailVerified;
+    }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

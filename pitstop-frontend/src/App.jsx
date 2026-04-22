@@ -9,6 +9,9 @@ import HistoryPage from './pages/HistoryPage';
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import VehicleOnboardingPage from "./pages/VehicleOnboardingPage";
 import ProblemsOnboardingPage from "./pages/ProblemsOnboardingPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
 
 function App() {
   return (
@@ -66,6 +69,10 @@ function App() {
         } />
 
         <Route path="/" element={<LoginPage />} />
+
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
       </Routes>
     </BrowserRouter>
   )

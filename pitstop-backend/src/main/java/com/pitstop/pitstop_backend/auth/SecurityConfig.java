@@ -38,7 +38,14 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
 
                         // ── Public ──────────────────────────────────────────────────
-                        .requestMatchers("/api/auth/register", "/api/auth/login", "/api/admin/setup").permitAll()
+                                .requestMatchers(
+                                        "/api/auth/register",
+                                        "/api/auth/login",
+                                        "/api/admin/setup",
+                                        "/api/auth/forgot-password",
+                                        "/api/auth/reset-password",
+                                        "/api/auth/verify-email"
+                                ).permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
 // ... other rules
                         // ── ADMIN only ──────────────────────────────────────────────

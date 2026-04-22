@@ -2,15 +2,18 @@ package com.pitstop.pitstop_backend.account;
 
 
 import com.pitstop.pitstop_backend.account.dto.*;
+import com.pitstop.pitstop_backend.auth.JwtUtil;
 import com.pitstop.pitstop_backend.common.dto.LoginResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.context.SecurityContextHolder;
 import com.pitstop.pitstop_backend.account.dto.MechanicPendingResponse;
 import com.pitstop.pitstop_backend.account.dto.VerifyMechanicRequest;
 import com.pitstop.pitstop_backend.account.RejectionReason;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
 import java.util.List;
@@ -21,9 +24,14 @@ import java.util.Map;
 @RequestMapping("/api")
 public class AccountController {
     private final AccountService accountService;
+    private final JwtUtil jwtUtil;
+    private final AccountRepository accountRepository;
 
-    public AccountController(AccountService accountService){
+
+    public AccountController(AccountService accountService, JwtUtil jwtUtil, AccountRepository accountRepository){
         this.accountService = accountService;
+        this.jwtUtil = jwtUtil;
+        this.accountRepository = accountRepository;
     }
 
     @PostMapping("/auth/register")
@@ -97,6 +105,33 @@ public class AccountController {
         Long accountId = getAccountId();
         accountService.updateExpertise(accountId, request);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/auth/forgot-password")
+    public ResponseEntity<String> forgotPassword(@RequestBody @Valid ForgotPasswordRequest request) {
+        accountService.forgotPassword(request.email());
+        return ResponseEntity.ok("If that email exists, a reset link has been sent.");
+    }
+
+    @PostMapping("/auth/reset-password")
+    public ResponseEntity<LoginResponse> resetPassword(@RequestBody @Valid ResetPasswordRequest request) {
+        LoginResponse response = accountService.resetPassword(request.token(), request.newPassword());
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/auth/send-verification")
+    public ResponseEntity<String> sendVerification(Authentication authentication) {
+        Long accountId = Long.parseLong(authentication.getName());
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
+        accountService.sendVerificationEmail(accountId, account.getEmail());
+        return ResponseEntity.ok("Verification email sent.");
+    }
+
+    @PostMapping("/auth/verify-email")
+    public ResponseEntity<LoginResponse> verifyEmail(@RequestParam String token) {
+        LoginResponse response = accountService.verifyEmail(token);
+        return ResponseEntity.ok(response);
     }
 
     private Long getAccountId() {
