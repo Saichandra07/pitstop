@@ -119,125 +119,104 @@ export default function ProblemsOnboardingPage() {
     };
 
     return (
-        <div style={styles.page}>
-            <div style={styles.card}>
-                <div style={styles.header}>
-                    <div style={styles.logo}>⚡ PitStop</div>
-                    <h1 style={styles.title}>What problems can you fix?</h1>
-                    <p style={styles.subtitle}>Step 3 of 3 — Select all you're confident handling</p>
-                </div>
+    <div style={{ minHeight: "100vh", background: "#141414", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "24px 16px", boxSizing: "border-box" }}>
+        <div style={{ width: "100%", maxWidth: 480, background: "#1a1a1a", borderRadius: 16, padding: "36px 24px", marginBottom: 32 }}>
 
-                {/* Progress bar */}
-                <div style={styles.progressTrack}>
-                    <div style={{ ...styles.progressFill, width: "100%" }} />
-                </div>
+            {/* Back button */}
+            <button
+                onClick={() => navigate("/mechanic/onboarding/vehicles")}
+                style={{ background: "#242424", border: "none", color: "#fff", width: 36, height: 36, borderRadius: "50%", fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}
+            >
+                ‹
+            </button>
 
-                {selectedWheelers.map(wheeler => {
-                    const problems = PROBLEMS_BY_WHEELER[wheeler];
-                    const selected = selectedProblems[wheeler] || new Set();
-                    const allSelected = problems.every(p => selected.has(p));
+            <h1 style={{ color: "#fff", fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>
+                What problems can you fix?
+            </h1>
+            <p style={{ color: "#888", fontSize: 14, margin: "0 0 20px" }}>
+                Step 3 of 3 — Select all you're confident handling
+            </p>
 
-                    return (
-                        <div key={wheeler} style={styles.block}>
-                            <div style={styles.blockHeader}>
-                                <span style={styles.blockTitle}>
-                                    {WHEELER_LABELS[wheeler].icon} {WHEELER_LABELS[wheeler].label}
-                                </span>
-                                <button
-                                    style={styles.selectAllBtn}
-                                    onClick={() => toggleAll(wheeler)}
-                                >
-                                    {allSelected ? "Deselect all" : "Select all"}
-                                </button>
-                            </div>
-                            <div style={styles.chipGrid}>
-                                {problems.map(problem => {
-                                    const checked = selected.has(problem);
-                                    return (
-                                        <div
-                                            key={problem}
-                                            style={{
-                                                ...styles.chip,
-                                                ...(checked ? styles.chipSelected : {})
-                                            }}
-                                            onClick={() => toggleProblem(wheeler, problem)}
-                                        >
-                                            {checked && <span style={styles.chipCheck}>✓ </span>}
-                                            {formatLabel(problem)}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    );
-                })}
-
-                {error && <div style={styles.error}>{error}</div>}
-
-                <button
-                    style={{ ...styles.btn, ...(loading ? styles.btnDisabled : {}) }}
-                    onClick={handleSubmit}
-                    disabled={loading}
-                >
-                    {loading ? "Submitting..." : "Submit Application ✓"}
-                </button>
+            {/* Progress bar — 3 segments, all filled for step 3 */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 28 }}>
+                <div style={{ flex: 1, height: 4, borderRadius: 2, background: "#61cd96" }} />
+                <div style={{ flex: 1, height: 4, borderRadius: 2, background: "#61cd96" }} />
+                <div style={{ flex: 1, height: 4, borderRadius: 2, background: "#E63946" }} />
             </div>
-        </div>
-    );
-}
 
-const styles = {
-    page: {
-        minHeight: "100vh", background: "#141414",
-        display: "flex", justifyContent: "center",
-        alignItems: "flex-start", padding: "24px 16px"
-    },
-    card: {
-        width: "100%", maxWidth: "480px",
-        background: "#1a1a1a", borderRadius: "16px",
-        padding: "36px 24px", marginBottom: "32px"
-    },
-    header: { textAlign: "center", marginBottom: "20px" },
-    logo: { color: "#E63946", fontSize: "20px", fontWeight: "700", marginBottom: "12px" },
-    title: { color: "#fff", fontSize: "22px", fontWeight: "700", margin: "0 0 6px" },
-    subtitle: { color: "#888", fontSize: "14px", margin: 0 },
-    progressTrack: {
-        height: "4px", background: "#2a2a2a", borderRadius: "2px", marginBottom: "28px"
-    },
-    progressFill: {
-        height: "100%", background: "#E63946", borderRadius: "2px"
-    },
-    block: {
-        background: "#242424", borderRadius: "12px",
-        padding: "16px", marginBottom: "12px"
-    },
-    blockHeader: {
-        display: "flex", justifyContent: "space-between",
-        alignItems: "center", marginBottom: "12px"
-    },
-    blockTitle: { color: "#fff", fontSize: "14px", fontWeight: "600" },
-    selectAllBtn: {
-        background: "none", border: "1px solid #333", borderRadius: "6px",
-        color: "#888", fontSize: "12px", padding: "4px 10px", cursor: "pointer"
-    },
-    chipGrid: { display: "flex", flexWrap: "wrap", gap: "8px" },
-    chip: {
-        background: "#1a1a1a", border: "1px solid #333",
-        borderRadius: "20px", padding: "6px 12px",
-        color: "#888", fontSize: "13px", cursor: "pointer", userSelect: "none"
-    },
-    chipSelected: {
-        background: "#2a1518", border: "1px solid #E63946", color: "#fff"
-    },
-    chipCheck: { color: "#E63946" },
-    error: {
-        background: "#2a1518", border: "1px solid #E63946", borderRadius: "8px",
-        padding: "12px", color: "#E63946", fontSize: "14px", marginBottom: "16px"
-    },
-    btn: {
-        width: "100%", background: "#E63946", border: "none",
-        borderRadius: "12px", padding: "15px", color: "#fff",
-        fontSize: "16px", fontWeight: "700", cursor: "pointer", marginTop: "8px"
-    },
-    btnDisabled: { opacity: 0.6, cursor: "not-allowed" }
-};
+            {selectedWheelers.map(wheeler => {
+                const problems = PROBLEMS_BY_WHEELER[wheeler];
+                const selected = selectedProblems[wheeler] || new Set();
+                const allSelected = problems.every(p => selected.has(p));
+
+                return (
+                    <div key={wheeler} style={{ background: "#242424", borderRadius: 12, padding: 16, marginBottom: 12 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                            <span style={{ color: "#fff", fontSize: 14, fontWeight: 600 }}>
+                                {WHEELER_LABELS[wheeler].icon} {WHEELER_LABELS[wheeler].label}
+                            </span>
+                            <button
+                                style={{ background: "none", border: "1px solid #333", borderRadius: 6, color: "#888", fontSize: 12, padding: "4px 10px", cursor: "pointer" }}
+                                onClick={() => toggleAll(wheeler)}
+                            >
+                                {allSelected ? "Deselect all" : "Select all"}
+                            </button>
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                            {problems.map(problem => {
+                                const checked = selected.has(problem);
+                                return (
+                                    <div
+                                        key={problem}
+                                        onClick={() => toggleProblem(wheeler, problem)}
+                                        style={{
+                                            background: checked ? "#2a1518" : "#1a1a1a",
+                                            border: `1px solid ${checked ? "#E63946" : "#333"}`,
+                                            borderRadius: 20,
+                                            padding: "6px 12px",
+                                            color: checked ? "#fff" : "#888",
+                                            fontSize: 13,
+                                            cursor: "pointer",
+                                            userSelect: "none"
+                                        }}
+                                    >
+                                        {checked && <span style={{ color: "#E63946" }}>✓ </span>}
+                                        {formatLabel(problem)}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            })}
+
+            {error && (
+                <div style={{ background: "#2a1518", border: "1px solid #E63946", borderRadius: 8, padding: 12, color: "#E63946", fontSize: 14, marginBottom: 16 }}>
+                    {error}
+                </div>
+            )}
+
+            <button
+                onClick={handleSubmit}
+                disabled={loading}
+                style={{
+                    width: "100%",
+                    background: "#E63946",
+                    border: "none",
+                    borderRadius: 12,
+                    padding: "15px",
+                    color: "#fff",
+                    fontSize: 16,
+                    fontWeight: 700,
+                    cursor: loading ? "not-allowed" : "pointer",
+                    opacity: loading ? 0.6 : 1,
+                    marginTop: 8
+                }}
+            >
+                {loading ? "Submitting..." : "Submit Application ✓"}
+            </button>
+
+        </div>
+    </div>
+);
+}

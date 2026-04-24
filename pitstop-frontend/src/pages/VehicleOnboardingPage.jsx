@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import "../pitstop.css";
 
 const WHEELER_OPTIONS = [
-    { key: "TWO_WHEELER",      label: "2-Wheeler",   sub: "Bike, Scooter",  icon: "🏍️" },
-    { key: "THREE_WHEELER",    label: "3-Wheeler",   sub: "Auto, Tempo",    icon: "🛺" },
-    { key: "FOUR_WHEELER",     label: "4-Wheeler",   sub: "Car, SUV, Van",  icon: "🚗" },
-    { key: "SIX_PLUS_WHEELER", label: "6-Wheeler+",  sub: "Truck, Bus",     icon: "🚛" }
+    { key: "TWO_WHEELER",      label: "2-Wheeler",   icon: "🏍️" },
+    { key: "THREE_WHEELER",    label: "3-Wheeler",   icon: "🛺" },
+    { key: "FOUR_WHEELER",     label: "4-Wheeler",   icon: "🚗" },
+    { key: "SIX_PLUS_WHEELER", label: "6-Wheeler+",  icon: "🚛" }
 ];
 
 export default function VehicleOnboardingPage() {
@@ -22,104 +23,90 @@ export default function VehicleOnboardingPage() {
 
     const handleNext = () => {
         if (selected.size === 0) return;
-        // Pass selected wheelers to next page via location state
         navigate("/mechanic/onboarding/problems", {
             state: { selectedWheelers: Array.from(selected) }
         });
     };
 
     return (
-        <div style={styles.page}>
-            <div style={styles.card}>
-                <div style={styles.header}>
-                    <div style={styles.logo}>⚡ PitStop</div>
-                    <h1 style={styles.title}>What vehicles do you service?</h1>
-                    <p style={styles.subtitle}>Step 2 of 3 — Select all that apply</p>
-                </div>
+    <div style={{ minHeight: "100vh", background: "#141414", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "24px 16px", boxSizing: "border-box" }}>
+        <div style={{ width: "100%", maxWidth: 480, background: "#1a1a1a", borderRadius: 16, padding: "36px 24px", marginBottom: 32 }}>
 
-                {/* Progress bar */}
-                <div style={styles.progressTrack}>
-                    <div style={{ ...styles.progressFill, width: "66%" }} />
-                </div>
+            {/* Back button */}
+            <button
+                onClick={() => navigate("/register/mechanic")}
+                style={{ background: "#242424", border: "none", color: "#fff", width: 36, height: 36, borderRadius: "50%", fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}
+            >
+                ‹
+            </button>
 
-                <div style={styles.grid}>
-                    {WHEELER_OPTIONS.map(({ key, label, sub, icon }) => {
-                        const isSelected = selected.has(key);
-                        return (
-                            <div
-                                key={key}
-                                style={{
-                                    ...styles.card2,
-                                    ...(isSelected ? styles.card2Selected : {})
-                                }}
-                                onClick={() => toggle(key)}
-                            >
-                                {isSelected && <span style={styles.check}>✓</span>}
-                                <span style={styles.icon}>{icon}</span>
-                                <span style={styles.label}>{label}</span>
-                                <span style={styles.sub}>{sub}</span>
-                            </div>
-                        );
-                    })}
-                </div>
+            <h1 style={{ color: "#fff", fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>
+                What vehicles do you service?
+            </h1>
+            <p style={{ color: "#888", fontSize: 14, margin: "0 0 20px" }}>
+                Step 2 of 3 — Select all that apply
+            </p>
 
-                <button
-                    style={{
-                        ...styles.btn,
-                        ...(selected.size === 0 ? styles.btnDisabled : {})
-                    }}
-                    onClick={handleNext}
-                    disabled={selected.size === 0}
-                >
-                    Next →
-                </button>
+            {/* Progress bar */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 28 }}>
+                <div style={{ flex: 1, height: 4, borderRadius: 2, background: "#61cd96" }} />
+                <div style={{ flex: 1, height: 4, borderRadius: 2, background: "#E63946" }} />
+                <div style={{ flex: 1, height: 4, borderRadius: 2, background: "#2a2a2a" }} />
             </div>
-        </div>
-    );
-}
 
-const styles = {
-    page: {
-        minHeight: "100vh", background: "#141414",
-        display: "flex", justifyContent: "center", alignItems: "center",
-        padding: "24px 16px"
-    },
-    card: {
-        width: "100%", maxWidth: "420px",
-        background: "#1a1a1a", borderRadius: "16px", padding: "36px 24px"
-    },
-    header: { textAlign: "center", marginBottom: "20px" },
-    logo: { color: "#E63946", fontSize: "20px", fontWeight: "700", marginBottom: "12px" },
-    title: { color: "#fff", fontSize: "22px", fontWeight: "700", margin: "0 0 6px" },
-    subtitle: { color: "#888", fontSize: "14px", margin: 0 },
-    progressTrack: {
-        height: "4px", background: "#2a2a2a", borderRadius: "2px", marginBottom: "28px"
-    },
-    progressFill: {
-        height: "100%", background: "#E63946", borderRadius: "2px"
-    },
-    grid: {
-        display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "24px"
-    },
-    card2: {
-        background: "#242424", border: "2px solid #2a2a2a",
-        borderRadius: "14px", padding: "20px 12px",
-        display: "flex", flexDirection: "column", alignItems: "center",
-        cursor: "pointer", position: "relative", userSelect: "none",
-        transition: "all 0.15s ease"
-    },
-    card2Selected: { border: "2px solid #E63946", background: "#2a1518" },
-    check: {
-        position: "absolute", top: "10px", right: "12px",
-        color: "#E63946", fontWeight: "700", fontSize: "14px"
-    },
-    icon: { fontSize: "32px", marginBottom: "8px" },
-    label: { color: "#fff", fontSize: "15px", fontWeight: "600" },
-    sub: { color: "#666", fontSize: "12px", marginTop: "3px" },
-    btn: {
-        width: "100%", background: "#E63946", border: "none",
-        borderRadius: "12px", padding: "15px", color: "#fff",
-        fontSize: "16px", fontWeight: "700", cursor: "pointer"
-    },
-    btnDisabled: { opacity: 0.4, cursor: "not-allowed" }
-};
+            {/* Wheeler grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 32 }}>
+                {WHEELER_OPTIONS.map(({ key, label, icon }) => {
+                    const isSelected = selected.has(key);
+                    return (
+                        <div
+                            key={key}
+                            onClick={() => toggle(key)}
+                            style={{
+                                background: isSelected ? "#2a1518" : "#242424",
+                                border: `2px solid ${isSelected ? "#E63946" : "#2a2a2a"}`,
+                                borderRadius: 16,
+                                padding: "28px 16px",
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                gap: 10,
+                                cursor: "pointer",
+                                position: "relative",
+                                userSelect: "none"
+                            }}
+                        >
+                            {isSelected && (
+                                <span style={{ position: "absolute", top: 10, right: 12, color: "#E63946", fontWeight: 700, fontSize: 13 }}>✓</span>
+                            )}
+                            <span style={{ fontSize: 36 }}>{icon}</span>
+                            <span style={{ color: "#fff", fontSize: 15, fontWeight: 600 }}>{label}</span>
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Next button */}
+            <button
+                onClick={handleNext}
+                disabled={selected.size === 0}
+                style={{
+                    width: "100%",
+                    background: "#E63946",
+                    border: "none",
+                    borderRadius: 12,
+                    padding: "15px",
+                    color: "#fff",
+                    fontSize: 16,
+                    fontWeight: 700,
+                    cursor: selected.size === 0 ? "not-allowed" : "pointer",
+                    opacity: selected.size === 0 ? 0.4 : 1
+                }}
+            >
+                Next →
+            </button>
+
+        </div>
+    </div>
+);
+}

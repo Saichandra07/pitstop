@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
 import { useAuth } from "../context/AuthContext";
+import "../pitstop.css";
 
 export default function VerifyEmailPage() {
   const [searchParams] = useSearchParams();
@@ -9,7 +10,7 @@ export default function VerifyEmailPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const [status, setStatus] = useState("verifying"); // verifying | success | error
+  const [status, setStatus] = useState("verifying");
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
@@ -37,43 +38,33 @@ export default function VerifyEmailPage() {
   }, []);
 
   if (status === "verifying") return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <div style={{ fontSize: 40, marginBottom: 12 }}>⏳</div>
-        <h2 style={styles.title}>Verifying your email...</h2>
-        <p style={styles.subtitle}>Just a moment.</p>
+    <div className="ps-page" style={{ justifyContent: "center" }}>
+      <div className="ps-card" style={{ textAlign: "center", maxWidth: 400 }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
+        <h2 style={{ color: "#fff", fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Verifying your email...</h2>
+        <p style={{ color: "#888", fontSize: 14 }}>Just a moment.</p>
       </div>
     </div>
   );
 
   if (status === "success") return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
-        <h2 style={styles.title}>Email verified!</h2>
-        <p style={styles.subtitle}>Taking you to your dashboard...</p>
+    <div className="ps-page" style={{ justifyContent: "center" }}>
+      <div className="ps-card" style={{ textAlign: "center", maxWidth: 400 }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+        <h2 style={{ color: "#fff", fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Email verified!</h2>
+        <p style={{ color: "#888", fontSize: 14 }}>Taking you to your dashboard...</p>
       </div>
     </div>
   );
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <div style={{ fontSize: 40, marginBottom: 12 }}>❌</div>
-        <h2 style={styles.title}>Verification failed</h2>
-        <p style={styles.subtitle}>{errorMsg}</p>
-        <button style={styles.button} onClick={() => navigate("/login")}>
-          Back to Login
-        </button>
+    <div className="ps-page" style={{ justifyContent: "center" }}>
+      <div className="ps-card" style={{ textAlign: "center", maxWidth: 400 }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
+        <h2 style={{ color: "#fff", fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Verification failed</h2>
+        <p className="ps-alert-error" style={{ marginBottom: 24 }}>{errorMsg}</p>
+        <button className="ps-btn" onClick={() => navigate("/login")}>Back to Login</button>
       </div>
     </div>
   );
 }
-
-const styles = {
-  container: { minHeight: "100vh", backgroundColor: "#141414", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 },
-  card: { backgroundColor: "#1e1e1e", borderRadius: 16, padding: 32, width: "100%", maxWidth: 400, textAlign: "center" },
-  title: { color: "#fff", fontSize: 22, fontWeight: 700, marginBottom: 8 },
-  subtitle: { color: "#888", fontSize: 14, marginBottom: 24 },
-  button: { width: "100%", padding: "14px", borderRadius: 10, backgroundColor: "#E63946", color: "#fff", fontWeight: 700, fontSize: 15, border: "none", cursor: "pointer" },
-};
