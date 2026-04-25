@@ -82,6 +82,14 @@ function historyBadge(status) {
 
 const ACTIVE_STATUSES = ["PENDING", "ACCEPTED", "IN_PROGRESS"];
 
+// ─── Heights (single source of truth) ───────────────────────────────────────
+// NAV_H: fixed bottom nav bar
+// SHEET_COLLAPSED: drag handle (28px) + SOS button (68px) + padding (16px)
+// SHEET_EXPANDED: collapsed + recent jobs section (~220px)
+const NAV_H = 56;
+const SHEET_COLLAPSED = 112;   // handle (28) + SOS button (68) + padding (16)
+const SHEET_EXPANDED  = 340;   // handle + SOS + recent cards section
+
 // ─── SVG icons (inline, no external dep) ────────────────────────────────────
 
 const BellIcon = () => (
@@ -97,7 +105,7 @@ const PhoneIcon = () => (
   </svg>
 );
 
-const HomeIcon = ({ active }) => (
+const HomeIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
     <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
     <path d="M9 22V12h6v10" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
@@ -127,8 +135,8 @@ const SosAlertIcon = () => (
 
 // ─── Map backgrounds ─────────────────────────────────────────────────────────
 
-// Idle map: user pin + mechanic dots
-function IdleMap() {
+// Idle map — fills entire screen, map adjusts bottom padding via prop
+function IdleMap({ bottomOffset }) {
   return (
     <div style={{ position: "absolute", inset: 0, background: "#0d1a0d" }}>
       {/* dot grid */}
@@ -150,11 +158,11 @@ function IdleMap() {
       {/* user pin */}
       <div style={{ position: "absolute", top: "36%", left: "48%", transform: "translate(-50%,-50%)", width: 12, height: 12, borderRadius: "50%", background: "#E63946", boxShadow: "0 0 0 3px rgba(230,57,70,0.25)" }} />
       {/* mechanic dots */}
-      {[{ top: "20%", left: "16%" }, { top: "48%", left: "72%" }, { top: "28%", left: "78%" }, { top: "60%", left: "22%" }].map((pos, i) => (
+      {[{ top: "18%", left: "16%" }, { top: "42%", left: "72%" }, { top: "25%", left: "78%" }, { top: "52%", left: "22%" }].map((pos, i) => (
         <div key={i} style={{ position: "absolute", ...pos, width: 7, height: 7, borderRadius: "50%", background: "#61cd96", opacity: 0.7 }} />
       ))}
-      {/* location label */}
-      <div style={{ position: "absolute", bottom: 170, left: 16, display: "flex", alignItems: "center", gap: 5 }}>
+      {/* location label — sits just above the bottom sheet, moves with it */}
+      <div style={{ position: "absolute", bottom: bottomOffset + 12, left: 16, display: "flex", alignItems: "center", gap: 5, transition: "bottom 0.35s cubic-bezier(0.32,0.72,0,1)" }}>
         <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#61cd96" }} />
         <span style={{ fontSize: 10, color: "rgba(97,205,150,0.6)", letterSpacing: "0.07em", fontVariant: "all-small-caps" }}>Your location</span>
       </div>
@@ -162,8 +170,8 @@ function IdleMap() {
   );
 }
 
-// Active job map: mechanic dot (yellow) + dashed route + ETA chip
-function ActiveMap({ job }) {
+// Active job map
+function ActiveMap({ bottomOffset }) {
   return (
     <div style={{ position: "absolute", inset: 0, background: "#0d1a0d" }}>
       <div style={{
@@ -203,8 +211,11 @@ export default function DashboardPage() {
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Touch swipe state
-  const [touchStartY, setTouchStartY] = useState(null);
+  // Drag state
+  const [dragging, setDragging] = useState(false);
+  const [dragStartY, setDragStartY] = useState(null);
+  const [dragStartH, setDragStartH] = useState(null);
+  const [liveSheetH, setLiveSheetH] = useState(null);
 
   const fetchActive = useCallback(async () => {
     try {
@@ -255,28 +266,79 @@ export default function DashboardPage() {
     navigate("/login");
   };
 
-  // Sheet toggle via drag handle tap or swipe
-  const handleTouchStart = (e) => setTouchStartY(e.touches[0].clientY);
-  const handleTouchEnd = (e) => {
-    if (touchStartY === null) return;
-    const delta = touchStartY - e.changedTouches[0].clientY;
-    if (delta > 30) setSheetExpanded(true);   // swipe up
-    if (delta < -30) setSheetExpanded(false);  // swipe down
-    setTouchStartY(null);
-  };
+  // ── Drag handlers ───────────────────────────────────────────────────────────
+  // Works for both real touch (phone) and mouse drag (Chrome emulator)
+  // During drag: liveSheetH tracks height in real-time (no transition)
+  // On release: snaps to COLLAPSED or EXPANDED based on where you let go
+
+  const snapHeight = sheetExpanded ? SHEET_EXPANDED : SHEET_COLLAPSED;
+
+  function startDrag(startY) {
+    setDragging(true);
+    setDragStartY(startY);
+    setDragStartH(snapHeight);
+    setLiveSheetH(snapHeight);
+  }
+
+  function moveDrag(currentY) {
+    if (!dragging || dragStartY === null) return;
+    const delta = dragStartY - currentY;          // positive = dragging up
+    const newH = Math.min(SHEET_EXPANDED, Math.max(SHEET_COLLAPSED, dragStartH + delta));
+    setLiveSheetH(newH);
+  }
+
+  function endDrag(currentY) {
+    if (!dragging) return;
+    const delta = dragStartY - currentY;
+    if (delta > 40) setSheetExpanded(true);
+    else if (delta < -40) setSheetExpanded(false);
+    // else snap back to wherever it was
+    setLiveSheetH(null);   // return to snapped value
+    setDragging(false);
+    setDragStartY(null);
+    setDragStartH(null);
+  }
+
+  // Touch events (real phone)
+  const handleTouchStart = (e) => startDrag(e.touches[0].clientY);
+  const handleTouchMove  = (e) => moveDrag(e.touches[0].clientY);
+  const handleTouchEnd   = (e) => endDrag(e.changedTouches[0].clientY);
+
+  // Mouse events (Chrome emulator)
+  const handleMouseDown  = (e) => startDrag(e.clientY);
+  const handleMouseMove  = (e) => moveDrag(e.clientY);
+  const handleMouseUp    = (e) => endDrag(e.clientY);
 
   const firstName = user?.name?.split(" ")[0] || "there";
   const initials = getInitials(user?.name || "");
   const si = activeJob ? statusInfo(activeJob.status) : null;
   const hasActiveJob = !!activeJob;
 
+  // Sheet height: use live drag value during drag, snapped value otherwise
+  const idleSheetH = liveSheetH !== null ? liveSheetH : (sheetExpanded ? SHEET_EXPANDED : SHEET_COLLAPSED);
+  const activeJobSheetH = hasActiveJob
+    ? (activeJob.status === "PENDING" ? 180 : 260)
+    : idleSheetH;
+
+  const mapBottomOffset = activeJobSheetH + NAV_H;
+
   return (
-    <div style={{ position: "relative", width: "100%", height: "100dvh", overflow: "hidden", background: "#141414", fontFamily: "'Inter', sans-serif" }}>
+    <div style={{
+      position: "relative",
+      width: "100%",
+      height: "100dvh",
+      overflow: "hidden",
+      background: "#141414",
+      fontFamily: "'Inter', sans-serif",
+    }}>
 
-      {/* ── Map ─────────────────────────────────────────────────────────── */}
-      {hasActiveJob ? <ActiveMap job={activeJob} /> : <IdleMap />}
+      {/* ── Map — fills full screen, label adjusts via bottomOffset ── */}
+      {hasActiveJob
+        ? <ActiveMap bottomOffset={mapBottomOffset} />
+        : <IdleMap bottomOffset={mapBottomOffset} />
+      }
 
-      {/* ── Topbar ──────────────────────────────────────────────────────── */}
+      {/* ── Topbar — floats over map ── */}
       <div style={{
         position: "absolute", top: 0, left: 0, right: 0,
         display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -289,7 +351,6 @@ export default function DashboardPage() {
           <div style={{ fontSize: 20, fontWeight: 600, color: "#f0f0f0", marginTop: 2, letterSpacing: "-0.5px" }}>{firstName}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* Bell */}
           <div style={{
             width: 36, height: 36, borderRadius: "50%",
             background: "rgba(20,20,20,0.75)",
@@ -299,7 +360,6 @@ export default function DashboardPage() {
           }}>
             <BellIcon />
           </div>
-          {/* Avatar → logout */}
           <div
             onClick={handleLogout}
             style={{
@@ -316,26 +376,41 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Bottom Sheet ─────────────────────────────────────────────────── */}
+      {/* ── Bottom Sheet — sits above nav, snaps between heights ── */}
       <div
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
         style={{
-          position: "absolute", bottom: 0, left: 0, right: 0,
+          position: "absolute",
+          left: 0, right: 0,
+          bottom: NAV_H,
+          height: activeJobSheetH,
           background: "#141414",
           borderRadius: "24px 24px 0 0",
-          padding: "10px 16px 0",
+          padding: "10px 16px",
           zIndex: 20,
-          // No fixed height — content drives it naturally
+          overflow: "hidden",
+          // Only animate when NOT actively dragging (snap on release)
+          transition: dragging ? "none" : "height 0.35s cubic-bezier(0.32,0.72,0,1)",
+          boxShadow: "0 -1px 0 0 #1e1e1e",
+          userSelect: "none",
+          cursor: dragging ? "grabbing" : "default",
         }}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
       >
-        {/* Drag handle */}
-        <div
-          onClick={() => setSheetExpanded((v) => !v)}
-          style={{ display: "flex", justifyContent: "center", paddingBottom: 14, cursor: "pointer" }}
-        >
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: "#2a2a2a" }} />
-        </div>
+        {/* Drag handle — only shown on idle (active job sheet doesn't expand) */}
+        {!hasActiveJob && (
+          <div
+            onClick={() => setSheetExpanded((v) => !v)}
+            style={{ display: "flex", justifyContent: "center", paddingBottom: 14, cursor: "pointer" }}
+          >
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: "#2a2a2a" }} />
+          </div>
+        )}
 
         {/* ── NO ACTIVE JOB: SOS button ── */}
         {!hasActiveJob && (
@@ -353,7 +428,6 @@ export default function DashboardPage() {
                 alignItems: "center",
                 justifyContent: "space-between",
                 cursor: "pointer",
-                marginBottom: 0,
               }}
             >
               <div style={{ textAlign: "left" }}>
@@ -371,36 +445,42 @@ export default function DashboardPage() {
               </div>
             </button>
 
-            {/* Recent requests — only when expanded + have history */}
-            {sheetExpanded && history.length > 0 && (
-              <>
-                <div style={{ fontSize: 10, color: "#3a3a3a", letterSpacing: "0.09em", textTransform: "uppercase", fontWeight: 500, margin: "16px 0 8px" }}>
-                  Recent requests
-                </div>
-                {history.map((job) => {
-                  const badge = historyBadge(job.status);
-                  return (
-                    <div key={job.id} style={{
-                      background: "#1a1a1a",
-                      border: "0.5px solid #222",
-                      borderRadius: 12,
-                      padding: "11px 14px",
-                      marginBottom: 8,
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                    }}>
-                      <div>
-                        <div style={{ fontSize: 13, color: "#d0d0d0", fontWeight: 500 }}>{problemLabel(job.problemType)}</div>
-                        <div style={{ fontSize: 11, color: "#484848", marginTop: 3 }}>
-                          {vehicleLabel(job.vehicleType)} · {job.vehicleName} · {formatDate(job.createdAt)}
+            {/* Recent requests — only when expanded */}
+            {sheetExpanded && (
+              history.length > 0 ? (
+                <>
+                  <div style={{ fontSize: 10, color: "#3a3a3a", letterSpacing: "0.09em", textTransform: "uppercase", fontWeight: 500, margin: "16px 0 8px" }}>
+                    Recent requests
+                  </div>
+                  {history.map((job) => {
+                    const badge = historyBadge(job.status);
+                    return (
+                      <div key={job.id} style={{
+                        background: "#1a1a1a",
+                        border: "0.5px solid #222",
+                        borderRadius: 12,
+                        padding: "11px 14px",
+                        marginBottom: 8,
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                      }}>
+                        <div>
+                          <div style={{ fontSize: 13, color: "#d0d0d0", fontWeight: 500 }}>{problemLabel(job.problemType)}</div>
+                          <div style={{ fontSize: 11, color: "#484848", marginTop: 3 }}>
+                            {vehicleLabel(job.vehicleType)} · {job.vehicleName} · {formatDate(job.createdAt)}
+                          </div>
                         </div>
+                        <span style={{ fontSize: 10, fontWeight: 600, background: badge.bg, color: badge.color, borderRadius: 20, padding: "3px 9px", whiteSpace: "nowrap" }}>
+                          {badge.label}
+                        </span>
                       </div>
-                      <span style={{ fontSize: 10, fontWeight: 600, background: badge.bg, color: badge.color, borderRadius: 20, padding: "3px 9px", whiteSpace: "nowrap" }}>
-                        {badge.label}
-                      </span>
-                    </div>
-                  );
-                })}
-              </>
+                    );
+                  })}
+                </>
+              ) : (
+                <div style={{ marginTop: 20, textAlign: "center" }}>
+                  <div style={{ fontSize: 12, color: "#333" }}>Your first SOS is one tap away</div>
+                </div>
+              )
             )}
           </>
         )}
@@ -412,7 +492,6 @@ export default function DashboardPage() {
             border: "0.5px solid #252525",
             borderRadius: 16,
             padding: 14,
-            marginBottom: 10,
           }}>
             {/* Eyebrow */}
             <div style={{ fontSize: 10, color: "#484848", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 500, marginBottom: 10 }}>
@@ -455,7 +534,6 @@ export default function DashboardPage() {
 
             {/* Action buttons */}
             <div style={{ display: "flex", gap: 8 }}>
-              {/* Call — only ACCEPTED / IN_PROGRESS */}
               {(activeJob.status === "ACCEPTED" || activeJob.status === "IN_PROGRESS") && (
                 <button
                   style={{
@@ -470,7 +548,6 @@ export default function DashboardPage() {
                   <PhoneIcon /> Call mechanic
                 </button>
               )}
-              {/* Cancel — only PENDING / ACCEPTED */}
               {(activeJob.status === "PENDING" || activeJob.status === "ACCEPTED") && (
                 <button
                   style={{
@@ -487,41 +564,41 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
+      </div>
 
-        {/* ── Bottom Nav (always at bottom of sheet) ── */}
-        <div style={{
-          display: "flex", justifyContent: "space-around", alignItems: "center",
-          height: 56,
-          background: "#111",
-          borderTop: "0.5px solid #1e1e1e",
-          margin: "0 -16px",   // bleed to sheet edges
-        }}>
-          {[
-            { label: "Home", icon: <HomeIcon />, path: "/dashboard" },
-            { label: "History", icon: <HistoryIcon />, path: "/history" },
-            { label: "Profile", icon: <ProfileIcon />, path: "/profile" },
-          ].map(({ label, icon, path }) => {
-            const active = window.location.pathname === path;
-            return (
-              <div
-                key={label}
-                onClick={() => navigate(path)}
-                style={{
-                  display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-                  color: active ? "#E63946" : "#2e2e2e",
-                  cursor: "pointer",
-                  padding: "4px 16px",
-                }}
-              >
-                {icon}
-                <span style={{ fontSize: 10, fontWeight: 500 }}>{label}</span>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Safe area spacer for phones with home indicator */}
-        <div style={{ height: "env(safe-area-inset-bottom, 0px)" }} />
+      {/* ── Bottom Nav — fixed to screen, completely independent of sheet ── */}
+      <div style={{
+        position: "absolute",
+        bottom: 0, left: 0, right: 0,
+        height: NAV_H,
+        display: "flex", justifyContent: "space-around", alignItems: "center",
+        background: "#111",
+        borderTop: "0.5px solid #1e1e1e",
+        zIndex: 30,
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+      }}>
+        {[
+          { label: "Home", icon: <HomeIcon />, path: "/dashboard" },
+          { label: "History", icon: <HistoryIcon />, path: "/history" },
+          { label: "Profile", icon: <ProfileIcon />, path: "/profile" },
+        ].map(({ label, icon, path }) => {
+          const active = window.location.pathname === path;
+          return (
+            <div
+              key={label}
+              onClick={() => navigate(path)}
+              style={{
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                color: active ? "#E63946" : "#2e2e2e",
+                cursor: "pointer",
+                padding: "4px 16px",
+              }}
+            >
+              {icon}
+              <span style={{ fontSize: 10, fontWeight: 500 }}>{label}</span>
+            </div>
+          );
+        })}
       </div>
 
     </div>
