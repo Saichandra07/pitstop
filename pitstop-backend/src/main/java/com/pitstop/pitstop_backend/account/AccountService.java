@@ -3,6 +3,9 @@ package com.pitstop.pitstop_backend.account;
 import com.pitstop.pitstop_backend.account.dto.*;
 import com.pitstop.pitstop_backend.auth.JwtUtil;
 import com.pitstop.pitstop_backend.common.dto.LoginResponse;
+import com.pitstop.pitstop_backend.exception.ResourceNotFoundException;
+import com.pitstop.pitstop_backend.job.JobRepository;
+import com.pitstop.pitstop_backend.job.JobStatus;
 import com.pitstop.pitstop_backend.job.ProblemType;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -11,7 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.pitstop.pitstop_backend.account.dto.MechanicPendingResponse;
 import com.pitstop.pitstop_backend.account.dto.VerifyMechanicRequest;
 import com.pitstop.pitstop_backend.account.RejectionReason;
-
+import java.util.stream.Collectors;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -28,6 +31,7 @@ public class AccountService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EmailVerificationTokenRepository emailVerificationTokenRepository;
     private final EmailService emailService;
+    private final JobRepository jobRepository;
 
     public AccountService(
             AccountRepository accountRepository,
@@ -38,7 +42,9 @@ public class AccountService {
             RejectionReasonRepository rejectionReasonRepository,
             PasswordResetTokenRepository passwordResetTokenRepository,
             EmailVerificationTokenRepository emailVerificationTokenRepository,
-            EmailService emailService) {
+            EmailService emailService,
+            JobRepository jobRepository
+            ) {
         this.accountRepository = accountRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
@@ -48,6 +54,7 @@ public class AccountService {
         this.passwordResetTokenRepository = passwordResetTokenRepository;
         this.emailVerificationTokenRepository = emailVerificationTokenRepository;
         this.emailService = emailService;
+        this.jobRepository = jobRepository;
     }
 
 
@@ -145,6 +152,18 @@ public class AccountService {
         if (profile.getVerificationStatus() != VerificationStatus.VERIFIED) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Only verified mechanics can change availability");
+        }
+
+        // Block going offline during an active job
+        if (profile.getIsAvailable()) {
+            boolean hasActiveJob = jobRepository.existsByMechanicProfileIdAndStatusIn(
+                    profile.getId(),
+                    List.of(JobStatus.ACCEPTED, JobStatus.IN_PROGRESS)
+            );
+            if (hasActiveJob) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Cannot go offline during an active job");
+            }
         }
 
         profile.setIsAvailable(!profile.getIsAvailable());
@@ -351,6 +370,109 @@ public class AccountService {
                 : null;
         VerificationStatus vs = profile != null ? profile.getVerificationStatus() : null;
         return new LoginResponse(jwt, account.getId(), account.getName(), account.getEmail(), account.getRole(), vs);
+    }
+
+    public List<AdminMechanicResponse> getAllMechanics(String search, String status) {
+        List<MechanicProfile> profiles;
+
+        if (search != null && !search.isBlank()) {
+            profiles = mechanicProfileRepository.searchByName(search);
+        } else if (status != null && !status.isBlank()) {
+            profiles = mechanicProfileRepository.findByVerificationStatus(
+                    VerificationStatus.valueOf(status)
+            );
+        } else {
+            profiles = mechanicProfileRepository.findAll();
+        }
+
+        return profiles.stream().map(mp -> new AdminMechanicResponse(
+                mp.getId(),
+                mp.getAccount().getId(),
+                mp.getAccount().getName(),
+                mp.getAccount().getEmail(),
+                mp.getPhone(),
+                mp.getServiceRadiusKm(),
+                mp.getArea(),
+                mp.getVerificationStatus().name(),
+                mp.getIsAvailable(),
+                mp.getTotalJobsCompleted(),
+                mp.getMidJobCancels(),
+                mp.getSuspensionReason(),
+                mp.getSuspensionEndsAt() != null ? mp.getSuspensionEndsAt().toString() : null,
+                mp.getAppealStatus().name(),
+                mp.getRejectionReason()
+        )).collect(Collectors.toList());
+    }
+
+    public List<AdminUserResponse> getAllUsers(String search) {
+        List<Account> users;
+
+        if (search != null && !search.isBlank()) {
+            users = accountRepository.searchUsersByName(Role.USER, search);
+        } else {
+            users = accountRepository.findByRole(Role.USER);
+        }
+
+        return users.stream().map(a -> new AdminUserResponse(
+                a.getId(),
+                a.getName(),
+                a.getEmail(),
+                a.getSosCancelCount(),
+                a.getSosTimeoutUntil() != null ? a.getSosTimeoutUntil().toString() : null,
+                a.getIsBanned(),
+                a.getCreatedAt().toString()
+        )).collect(Collectors.toList());
+    }
+
+    public void adminSuspendMechanic(Long mechanicProfileId, AdminPenaltyRequest request) {
+        MechanicProfile mp = mechanicProfileRepository.findById(mechanicProfileId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mechanic not found"));
+        mp.setVerificationStatus(VerificationStatus.SUSPENDED);
+        mp.setSuspensionReason(request.reason());
+        mp.setSuspensionEndsAt(LocalDateTime.now().plusDays(request.suspensionDays()));
+        mechanicProfileRepository.save(mp);
+    }
+
+    public void adminUnsuspendMechanic(Long mechanicProfileId) {
+        MechanicProfile mp = mechanicProfileRepository.findById(mechanicProfileId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mechanic not found"));
+        mp.setVerificationStatus(VerificationStatus.VERIFIED);
+        mp.setSuspensionReason(null);
+        mp.setSuspensionEndsAt(null);
+        mechanicProfileRepository.save(mp);
+    }
+
+    public void adminDeleteMechanic(Long mechanicProfileId) {
+        MechanicProfile mp = mechanicProfileRepository.findById(mechanicProfileId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mechanic not found"));
+        Account account = mp.getAccount();
+        mechanicProfileRepository.delete(mp);
+        accountRepository.delete(account);
+    }
+
+    public void adminSetUserBan(Long accountId, boolean ban) {
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        account.setIsBanned(ban);
+        accountRepository.save(account);
+    }
+
+    public void adminSetUserTimeout(Long accountId, AdminTimeoutRequest request) {
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        if (request.hours() == 0) {
+            account.setSosTimeoutUntil(null);
+            account.setSosCancelCount(0);
+        } else {
+            account.setSosTimeoutUntil(LocalDateTime.now().plusHours(request.hours()));
+        }
+        accountRepository.save(account);
+    }
+
+    public void adminDeleteUser(Long accountId) {
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        accountRepository.delete(account);
     }
 
 }

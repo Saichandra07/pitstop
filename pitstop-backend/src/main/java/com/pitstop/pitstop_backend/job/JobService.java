@@ -1,16 +1,16 @@
 package com.pitstop.pitstop_backend.job;
 
-import com.pitstop.pitstop_backend.account.MechanicExpertiseRepository;
-import com.pitstop.pitstop_backend.account.MechanicProfile;
-import com.pitstop.pitstop_backend.account.MechanicProfileRepository;
-import com.pitstop.pitstop_backend.account.VerificationStatus;
+import com.pitstop.pitstop_backend.account.*;
 import com.pitstop.pitstop_backend.exception.ResourceNotFoundException;
+import com.pitstop.pitstop_backend.job.dto.AdminJobResponse;
 import com.pitstop.pitstop_backend.job.dto.JobResponseDto;
 import com.pitstop.pitstop_backend.job.dto.SosRequestDto;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -21,6 +21,8 @@ public class JobService {
     private final JobRepository jobRepository;
     private final MechanicProfileRepository mechanicProfileRepository;
     private final MechanicExpertiseRepository mechanicExpertiseRepository;
+    @Autowired
+    private AccountRepository accountRepository;
 
     public JobService(JobRepository jobRepository,
                       MechanicProfileRepository mechanicProfileRepository,
@@ -89,6 +91,59 @@ public class JobService {
     public List<JobResponseDto> getAllJobs() {
         return jobRepository.findAll()
                 .stream().map(this::toDto).collect(Collectors.toList());
+    }
+    public List<AdminJobResponse> getAllJobsForAdmin(String status, String search) {
+        List<Job> jobs;
+
+        if (search != null && !search.isBlank()) {
+            jobs = jobRepository.searchByUserNameOrArea(search);
+        } else if (status != null && !status.isBlank()) {
+            jobs = jobRepository.findByStatusOrderByCreatedAtDesc(JobStatus.valueOf(status));
+        } else {
+            jobs = jobRepository.findAllByOrderByCreatedAtDesc();
+        }
+
+        return jobs.stream().map(j -> {
+            String userName = accountRepository.findById(j.getAccountId())
+                    .map(Account::getName).orElse("Unknown");
+            String mechanicName = null;
+            if (j.getMechanicProfileId() != null) {
+                mechanicName = mechanicProfileRepository.findById(j.getMechanicProfileId())
+                        .map(mp -> mp.getAccount().getName()).orElse(null);
+            }
+            return new AdminJobResponse(
+                    j.getId(),
+                    userName,
+                    mechanicName,
+                    j.getVehicleType().name(),
+                    j.getProblemType().name(),
+                    j.getVehicleName(),
+                    j.getArea(),
+                    j.getStatus().name(),
+                    j.getBroadcastRing(),
+                    j.getCreatedAt().toString(),
+                    j.getUpdatedAt().toString()
+            );
+        }).collect(Collectors.toList());
+    }
+
+    public void adminForceComplete(Long jobId) {
+        Job job = jobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("Job not found"));
+        if (job.getStatus() == JobStatus.COMPLETED || job.getStatus() == JobStatus.CANCELLED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Job already closed");
+        }
+        job.setStatus(JobStatus.COMPLETED);
+        job.setUpdatedAt(LocalDateTime.now());
+        jobRepository.save(job);
+
+        // auto online the mechanic if one was assigned
+        if (job.getMechanicProfileId() != null) {
+            mechanicProfileRepository.findById(job.getMechanicProfileId()).ifPresent(mp -> {
+                mp.setIsAvailable(true);
+                mechanicProfileRepository.save(mp);
+            });
+        }
     }
 
     public JobResponseDto getJobById(Long id) {

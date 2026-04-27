@@ -7,6 +7,7 @@ import com.pitstop.pitstop_backend.common.dto.LoginResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -137,6 +138,76 @@ public class AccountController {
     private Long getAccountId() {
         return (Long) SecurityContextHolder.getContext()
                 .getAuthentication().getPrincipal();
+    }
+
+    // Admin - Mechanics
+    @GetMapping("/admin/mechanics")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<AdminMechanicResponse>> getAllMechanics(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status) {
+        return ResponseEntity.ok(accountService.getAllMechanics(search, status));
+    }
+
+    @PostMapping("/admin/mechanics/{id}/suspend")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> suspendMechanic(
+            @PathVariable Long id,
+            @RequestBody @Valid AdminPenaltyRequest request) {
+        accountService.adminSuspendMechanic(id, request);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/admin/mechanics/{id}/unsuspend")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> unsuspendMechanic(@PathVariable Long id) {
+        accountService.adminUnsuspendMechanic(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/admin/mechanics/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> deleteMechanic(@PathVariable Long id) {
+        accountService.adminDeleteMechanic(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    //Admin - users
+    @GetMapping("/admin/users")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<AdminUserResponse>> getAllUsers(
+            @RequestParam(required = false) String search) {
+        return ResponseEntity.ok(accountService.getAllUsers(search));
+    }
+
+    @PostMapping("/admin/users/{id}/ban")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> banUser(@PathVariable Long id) {
+        accountService.adminSetUserBan(id, true);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/admin/users/{id}/unban")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> unbanUser(@PathVariable Long id) {
+        accountService.adminSetUserBan(id, false);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/admin/users/{id}/timeout")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> setUserTimeout(
+            @PathVariable Long id,
+            @RequestBody AdminTimeoutRequest request) {
+        accountService.adminSetUserTimeout(id, request);
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/admin/users/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+        accountService.adminDeleteUser(id);
+        return ResponseEntity.noContent().build();
     }
 
 }

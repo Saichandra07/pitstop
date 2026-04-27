@@ -1,10 +1,12 @@
 package com.pitstop.pitstop_backend.job;
 
+import com.pitstop.pitstop_backend.job.dto.AdminJobResponse;
 import com.pitstop.pitstop_backend.job.dto.JobResponseDto;
 import com.pitstop.pitstop_backend.job.dto.SosRequestDto;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import java.util.Optional;
@@ -97,6 +99,21 @@ public class JobController {
     public ResponseEntity<Void> deleteJob(@PathVariable Long id) {
         jobService.deleteJob(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/admin/jobs")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<AdminJobResponse>> getAllJobsForAdmin(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String search) {
+        return ResponseEntity.ok(jobService.getAllJobsForAdmin(status, search));
+    }
+
+    @PostMapping("/admin/jobs/{id}/force-complete")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> forceComplete(@PathVariable Long id) {
+        jobService.adminForceComplete(id);
+        return ResponseEntity.ok().build();
     }
 
     // JWT helper

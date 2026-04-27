@@ -59,6 +59,12 @@ public class MechanicProfile {
     @Column(nullable = true)
     private String rejectionReason;
 
+    @Column(name = "area")
+    private String area;
+
+    @Column(name = "suspension_reason", length = 500)
+    private String suspensionReason;
+
     @PrePersist
     protected void onCreate() {
         if (this.verificationStatus == null) {
@@ -116,4 +122,10 @@ public class MechanicProfile {
 
     public String getRejectionReason() { return rejectionReason; }
     public void setRejectionReason(String rejectionReason) { this.rejectionReason = rejectionReason; }
+
+    public String getArea() { return area; }
+    public void setArea(String area) { this.area = area; }
+
+    public String getSuspensionReason() { return suspensionReason; }
+    public void setSuspensionReason(String suspensionReason) { this.suspensionReason = suspensionReason; }
 }

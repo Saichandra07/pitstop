@@ -56,6 +56,9 @@ public class Job {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    @Column(name = "area")
+    private String area;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -113,4 +116,7 @@ public class Job {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public String getArea() { return area; }
+    public void setArea(String area) { this.area = area; }
 }

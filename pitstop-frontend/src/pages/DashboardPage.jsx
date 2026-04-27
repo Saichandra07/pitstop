@@ -212,6 +212,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   // Drag state
+  const [showLogoutSheet, setShowLogoutSheet] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [dragStartY, setDragStartY] = useState(null);
   const [dragStartH, setDragStartH] = useState(null);
@@ -361,7 +362,7 @@ export default function DashboardPage() {
             <BellIcon />
           </div>
           <div
-            onClick={handleLogout}
+            onClick={() => setShowLogoutSheet(true)}
             style={{
               width: 36, height: 36, borderRadius: "50%",
               background: "#E63946",
@@ -600,6 +601,19 @@ export default function DashboardPage() {
           );
         })}
       </div>
+
+      {/* Logout sheet */}
+      {showLogoutSheet && (
+        <div style={{ position: "absolute", inset: 0, zIndex: 100 }}>
+          <div onClick={() => setShowLogoutSheet(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)" }} />
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "#1a1a1a", borderRadius: "20px 20px 0 0", padding: "24px 20px 36px", zIndex: 101 }}>
+            <p style={{ color: "#fff", fontWeight: 600, fontSize: 16, marginBottom: 6 }}>Log out?</p>
+            <p style={{ color: "#555", fontSize: 13, marginBottom: 24 }}>You'll need to sign in again to use PitStop.</p>
+            <button onClick={handleLogout} style={{ width: "100%", height: 48, borderRadius: 12, background: "#E63946", border: "none", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", marginBottom: 10 }}>Log out</button>
+            <button onClick={() => setShowLogoutSheet(false)} style={{ width: "100%", height: 48, borderRadius: 12, background: "transparent", border: "0.5px solid #2a2a2a", color: "#555", fontSize: 14, cursor: "pointer" }}>Cancel</button>
+          </div>
+        </div>
+      )}
 
     </div>
   );
