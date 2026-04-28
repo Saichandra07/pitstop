@@ -122,7 +122,7 @@ public class JobService {
                     j.getStatus().name(),
                     j.getBroadcastRing(),
                     j.getCreatedAt().toString(),
-                    j.getUpdatedAt().toString()
+                    j.getUpdatedAt() != null ? j.getUpdatedAt().toString() : j.getCreatedAt().toString()
             );
         }).collect(Collectors.toList());
     }

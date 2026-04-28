@@ -376,7 +376,7 @@ public class AccountService {
         List<MechanicProfile> profiles;
 
         if (search != null && !search.isBlank()) {
-            profiles = mechanicProfileRepository.searchByName(search);
+            profiles = mechanicProfileRepository.searchByNameOrArea(search);
         } else if (status != null && !status.isBlank()) {
             profiles = mechanicProfileRepository.findByVerificationStatus(
                     VerificationStatus.valueOf(status)

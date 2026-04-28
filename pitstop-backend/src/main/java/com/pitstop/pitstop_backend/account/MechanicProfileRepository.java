@@ -16,8 +16,7 @@ public interface MechanicProfileRepository extends JpaRepository<MechanicProfile
 
     List<MechanicProfile> findAll();
 
-    @Query("SELECT mp FROM MechanicProfile mp JOIN mp.account a WHERE " +
-            "LOWER(a.name) LIKE LOWER(CONCAT('%', :search, '%'))")
-    List<MechanicProfile> searchByName(@Param("search") String search);
+    @Query("SELECT mp FROM MechanicProfile mp JOIN mp.account a WHERE LOWER(a.name) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(mp.area) LIKE LOWER(CONCAT('%', :query, '%'))")
+    List<MechanicProfile> searchByNameOrArea(@Param("query") String query);
 
 }
