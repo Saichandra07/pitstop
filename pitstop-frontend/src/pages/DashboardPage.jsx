@@ -105,10 +105,10 @@ const PhoneIcon = () => (
   </svg>
 );
 
-const HomeIcon = () => (
+const SosNavIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-    <path d="M9 22V12h6v10" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+    <polygon points="12,3 22,21 2,21" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" fill="none"/>
+    <path d="M12 10v5M12 17.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
   </svg>
 );
 
@@ -339,25 +339,51 @@ export default function DashboardPage() {
         : <IdleMap bottomOffset={mapBottomOffset} />
       }
 
-      {/* ── Topbar — floats over map ── */}
+      {/* ── Topbar — floats over map, single row ── */}
       <div style={{
         position: "absolute", top: 0, left: 0, right: 0,
         display: "flex", justifyContent: "space-between", alignItems: "center",
-        padding: "22px 20px 14px",
-        background: "linear-gradient(180deg, rgba(13,26,13,0.92) 0%, rgba(13,26,13,0) 100%)",
+        padding: "20px 16px 28px",
+        background: "linear-gradient(180deg, rgba(13,26,13,0.95) 0%, rgba(13,26,13,0.0) 100%)",
         zIndex: 10,
       }}>
-        <div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.04em" }}>{getGreeting()}</div>
-          <div style={{ fontSize: 20, fontWeight: 600, color: "#f0f0f0", marginTop: 2, letterSpacing: "-0.5px" }}>{firstName}</div>
+
+        {/* Logo — left */}
+        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+          <div style={{
+            width: 28, height: 28, background: "#E63946", borderRadius: 8,
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}>
+            <svg width="13" height="13" viewBox="0 0 12 12" fill="none">
+              <polygon points="6,1 11,10 1,10" fill="white" />
+            </svg>
+          </div>
+          <span style={{ fontSize: 17, fontWeight: 700, color: "#fff", letterSpacing: 0.2 }}>
+            PitStop
+          </span>
         </div>
+
+        {/* Greeting pill — center */}
+        <div style={{
+          background: "rgba(255,255,255,0.07)",
+          border: "0.5px solid rgba(255,255,255,0.1)",
+          borderRadius: 20,
+          padding: "5px 12px",
+          display: "flex", alignItems: "center", gap: 5,
+        }}>
+          <span style={{ fontSize: 13 }}>👋 Welcome </span>
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", fontWeight: 500 }}>
+            {firstName}
+          </span>
+        </div>
+
+        {/* Bell + Avatar — right */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{
             width: 36, height: 36, borderRadius: "50%",
             background: "rgba(20,20,20,0.75)",
             border: "0.5px solid rgba(255,255,255,0.08)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            backdropFilter: "blur(4px)",
           }}>
             <BellIcon />
           </div>
@@ -375,6 +401,7 @@ export default function DashboardPage() {
             {initials}
           </div>
         </div>
+
       </div>
 
       {/* ── Bottom Sheet — sits above nav, snaps between heights ── */}
@@ -446,6 +473,45 @@ export default function DashboardPage() {
               </div>
             </button>
 
+            {/* Last job strip — visible in collapsed state */}
+            {history.length > 0 ? (
+              <div
+                onClick={() => navigate("/history")}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "10px 12px",
+                  background: "#1a1a1a",
+                  borderRadius: 12,
+                  border: "0.5px solid #222",
+                  marginTop: 10,
+                  cursor: "pointer",
+                }}
+              >
+                <div style={{
+                  width: 34, height: 34, borderRadius: "50%",
+                  background: "#242424",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 17, flexShrink: 0,
+                }}>
+                  {{ TWO_WHEELER: "🛵", THREE_WHEELER: "🛺", FOUR_WHEELER: "🚗", SIX_PLUS_WHEELER: "🚛" }[history[0].vehicleType] || "🚗"}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#d0d0d0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {problemLabel(history[0].problemType)} · {history[0].vehicleName}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#484848", marginTop: 2 }}>
+                    {formatDate(history[0].createdAt)}
+                  </div>
+                </div>
+                <span style={{ fontSize: 11, color: "#61cd96", fontWeight: 600, flexShrink: 0 }}>Done</span>
+                <span style={{ color: "#333", fontSize: 14, flexShrink: 0 }}>›</span>
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: "#333", textAlign: "center", paddingTop: 8, paddingBottom: 2 }}>
+                Your first SOS is one tap away
+              </div>
+            )}
+
             {/* Recent requests — only when expanded */}
             {sheetExpanded && (
               history.length > 0 ? (
@@ -477,11 +543,7 @@ export default function DashboardPage() {
                     );
                   })}
                 </>
-              ) : (
-                <div style={{ marginTop: 20, textAlign: "center" }}>
-                  <div style={{ fontSize: 12, color: "#333" }}>Your first SOS is one tap away</div>
-                </div>
-              )
+              ) : null
             )}
           </>
         )}
@@ -579,7 +641,7 @@ export default function DashboardPage() {
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}>
         {[
-          { label: "Home", icon: <HomeIcon />, path: "/dashboard" },
+          { label: "SOS", icon: <SosNavIcon />, path: "/dashboard" },
           { label: "History", icon: <HistoryIcon />, path: "/history" },
           { label: "Profile", icon: <ProfileIcon />, path: "/profile" },
         ].map(({ label, icon, path }) => {

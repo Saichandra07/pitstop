@@ -12,6 +12,7 @@ import ProblemsOnboardingPage from "./pages/ProblemsOnboardingPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
+import SOSWizardPage from './pages/SOSWizardPage';
 
 function App() {
   return (
@@ -32,6 +33,12 @@ function App() {
         <Route path="/history" element={
           <ProtectedRoute allowedRoles={['USER']}>
             <HistoryPage />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/sos" element={
+          <ProtectedRoute allowedRoles={['USER']}>
+            <SOSWizardPage />
           </ProtectedRoute>
         } />
 

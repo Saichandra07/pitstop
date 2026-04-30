@@ -315,7 +315,6 @@ function OverviewTab({ stats }) {
               borderBottom: `2px solid ${c.color}${hasValue ? "55" : "18"}`,
               position: "relative", overflow: "hidden",
             }}>
-              {/* Background glow blob */}
               <div style={{
                 position: "absolute", top: -20, right: -20,
                 width: 70, height: 70, borderRadius: "50%",
@@ -445,11 +444,11 @@ function VerifyTab({ rejectionReasons, onAction }) {
    MECHANICS TAB
 ───────────────────────────────────────────── */
 function MechanicsTab() {
-  const [mechanics, setMechanics]   = useState([]);
-  const [search, setSearch]         = useState("");
-  const [filter, setFilter]         = useState("");
-  const [loading, setLoading]       = useState(true);
-  const [openSuspend, setOpen]      = useState(null);
+  const [mechanics, setMechanics]     = useState([]);
+  const [search, setSearch]           = useState("");
+  const [filter, setFilter]           = useState("");
+  const [loading, setLoading]         = useState(true);
+  const [openSuspend, setOpen]        = useState(null);
   const [suspendForm, setSuspendForm] = useState({});
 
   const load = useCallback(() => {
@@ -485,69 +484,126 @@ function MechanicsTab() {
       />
 
       {loading ? <Loading /> : !mechanics.length ? <EmptyState text="No mechanics found" /> :
-        mechanics.map(m => (
-          <Card key={m.id} status={m.verificationStatus}>
-            <CardBody>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <Avatar name={m.name} />
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: m.verificationStatus === "SUSPENDED" ? C.dim : C.text, marginBottom: 2 }}>{m.name}</div>
-                    <Stars rating={m.rating} />
-                    <div style={{ fontSize: 11, color: C.dim, marginTop: 2 }}>
-                      {m.totalJobsCompleted ?? 0} jobs · {m.midJobCancels ?? 0} cancels
+        mechanics.map(m => {
+          const st = m.verificationStatus;
+          const accent = STATUS[st]?.accent || C.border;
+          const isSuspended = st === "SUSPENDED";
+          const initials = (m.name || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+          const light = [C.yellow, C.green].includes(accent);
+          return (
+            <div key={m.id} style={{
+              background: C.surface, borderRadius: 16, marginBottom: 12,
+              border: `0.5px solid ${C.border}`, overflow: "hidden",
+            }}>
+              <div style={{ padding: "16px 16px 14px" }}>
+
+                {/* Top row — square avatar + name block + badge */}
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 16 }}>
+                  <div style={{
+                    width: 54, height: 54, borderRadius: 14, background: accent,
+                    flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 20, fontWeight: 800, color: light ? "#141414" : "#fff",
+                    boxShadow: `0 4px 16px ${accent}44`,
+                  }}>{initials}</div>
+
+                  <div style={{ flex: 1, minWidth: 0, paddingTop: 2, textAlign: "left" }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: isSuspended ? C.dim : C.text, marginBottom: 3, letterSpacing: "-0.2px" }}>
+                      {m.name}
                     </div>
-                    {m.area && <div style={{ fontSize: 10, color: C.dimmer, marginTop: 2 }}>📍 {m.area}</div>}
+                    <Stars rating={m.rating} />
+                    {m.area && (
+                      <div className="adm-mono" style={{ fontSize: 10, color: C.dimmer, marginTop: 3 }}>📍 {m.area}</div>
+                    )}
                   </div>
+
+                  <Badge status={st} />
                 </div>
-                <Badge status={m.verificationStatus} />
+
+                {/* Stats row */}
+                <div style={{
+                  display: "flex",
+                  background: C.raised, borderRadius: 12,
+                  border: `0.5px solid ${C.border2}`, marginBottom: 14,
+                  overflow: "hidden",
+                }}>
+                  {[
+                    { label: "Jobs done", value: m.totalJobsCompleted ?? 0       },
+                    { label: "Cancels",   value: m.midJobCancels ?? 0            },
+                    { label: "Radius",    value: `${m.serviceRadiusKm ?? 0}km`   },
+                  ].map((s, i, arr) => (
+                    <div key={s.label} style={{
+                      flex: 1, padding: "10px 0", textAlign: "center",
+                      borderRight: i < arr.length - 1 ? `0.5px solid ${C.border2}` : "none",
+                    }}>
+                      <div className="adm-mono" style={{ fontSize: 16, fontWeight: 600, color: C.text, lineHeight: 1 }}>{s.value}</div>
+                      <div style={{ fontSize: 10, color: C.dim, marginTop: 4, letterSpacing: "0.02em" }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Suspension banner */}
+                {isSuspended && m.suspensionReason && (
+                  <div style={{
+                    background: "#180808", border: `0.5px solid #2a1010`, borderRadius: 10,
+                    padding: "8px 12px", marginBottom: 14, fontSize: 11, color: "#b05050",
+                  }}>
+                    ⚠ {m.suspensionReason}
+                    {m.suspensionEndsAt && (
+                      <span style={{ color: C.dim }}> · ends {new Date(m.suspensionEndsAt).toLocaleDateString("en-IN")}</span>
+                    )}
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                {isSuspended ? (
+                  <BtnRow>
+                    <button className="adm-btn" onClick={() => handleUnsuspend(m.id)} style={{
+                      flex: 1, height: 38, borderRadius: 10, border: "none",
+                      background: C.green, color: "#141414", fontSize: 12, fontWeight: 700,
+                    }}>Unsuspend</button>
+                    <button className="adm-btn" onClick={() => handleDelete(m.id)} style={{
+                      width: 38, height: 38, borderRadius: 10,
+                      background: "#1a0808", border: `0.5px solid #2a0a0a`,
+                      color: C.red, fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>×</button>
+                  </BtnRow>
+                ) : (
+                  <BtnRow>
+                    <button className="adm-btn" onClick={() => setOpen(openSuspend === m.id ? null : m.id)} style={{
+                      flex: 1, height: 38, borderRadius: 10,
+                      background: "#1e1608", border: `0.5px solid #2a1f0a`,
+                      color: C.yellow, fontSize: 12, fontWeight: 600,
+                    }}>Suspend</button>
+                    <button className="adm-btn" onClick={() => handleDelete(m.id)} style={{
+                      width: 38, height: 38, borderRadius: 10,
+                      background: C.raised, border: `0.5px solid ${C.border2}`,
+                      color: C.dim, fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>×</button>
+                  </BtnRow>
+                )}
               </div>
 
-              {m.verificationStatus === "SUSPENDED" && m.suspensionReason && (
-                <div style={{
-                  background: "#180808", border: `0.5px solid #2a1010`, borderRadius: 8,
-                  padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "#b05050",
-                }}>
-                  ⚠ {m.suspensionReason}
-                  {m.suspensionEndsAt && <span style={{ color: C.dim }}> · ends {new Date(m.suspensionEndsAt).toLocaleDateString("en-IN")}</span>}
-                </div>
-              )}
-
-              <BtnRow>
-                {m.verificationStatus === "SUSPENDED" ? (
-                  <>
-                    <Btn label="Unsuspend" variant="green" onClick={() => handleUnsuspend(m.id)} />
-                    <Btn label="Delete"    variant="red"   small onClick={() => handleDelete(m.id)} />
-                  </>
-                ) : (
-                  <>
-                    <Btn label="Suspend" variant="yellow" onClick={() => setOpen(openSuspend === m.id ? null : m.id)} />
-                    <Btn label="Delete"  variant="red"    small onClick={() => handleDelete(m.id)} />
-                  </>
-                )}
-              </BtnRow>
-            </CardBody>
-
-            <InlineForm open={openSuspend === m.id}>
-              <div style={{ fontSize: 11, color: C.dim, marginBottom: 7 }}>Suspension details</div>
-              <TinyInput
-                placeholder="Reason for suspension..."
-                value={suspendForm[m.id]?.reason || ""}
-                onChange={e => setSuspendForm(p => ({ ...p, [m.id]: { ...p[m.id], reason: e.target.value } }))}
-              />
-              <TinyInput
-                placeholder="Duration in days (e.g. 3)"
-                type="number"
-                value={suspendForm[m.id]?.days || ""}
-                onChange={e => setSuspendForm(p => ({ ...p, [m.id]: { ...p[m.id], days: e.target.value } }))}
-              />
-              <BtnRow>
-                <Btn label="Confirm suspend" variant="yellow" small onClick={() => handleSuspend(m.id)} />
-                <Btn label="Cancel"          variant="ghost"  small onClick={() => setOpen(null)} />
-              </BtnRow>
-            </InlineForm>
-          </Card>
-        ))
+              <InlineForm open={openSuspend === m.id}>
+                <div style={{ fontSize: 11, color: C.dim, marginBottom: 7 }}>Suspension details</div>
+                <TinyInput
+                  placeholder="Reason for suspension..."
+                  value={suspendForm[m.id]?.reason || ""}
+                  onChange={e => setSuspendForm(p => ({ ...p, [m.id]: { ...p[m.id], reason: e.target.value } }))}
+                />
+                <TinyInput
+                  placeholder="Duration in days (e.g. 3)"
+                  type="number"
+                  value={suspendForm[m.id]?.days || ""}
+                  onChange={e => setSuspendForm(p => ({ ...p, [m.id]: { ...p[m.id], days: e.target.value } }))}
+                />
+                <BtnRow>
+                  <Btn label="Confirm suspend" variant="yellow" small onClick={() => handleSuspend(m.id)} />
+                  <Btn label="Cancel"          variant="ghost"  small onClick={() => setOpen(null)} />
+                </BtnRow>
+              </InlineForm>
+            </div>
+          );
+        })
       }
     </>
   );
@@ -557,9 +613,9 @@ function MechanicsTab() {
    JOBS TAB
 ───────────────────────────────────────────── */
 function JobsTab() {
-  const [jobs, setJobs]     = useState([]);
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("");
+  const [jobs, setJobs]       = useState([]);
+  const [search, setSearch]   = useState("");
+  const [filter, setFilter]   = useState("");
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
@@ -679,13 +735,10 @@ function UsersTab() {
               background: C.surface, borderRadius: 16, marginBottom: 12,
               border: `0.5px solid ${C.border}`, overflow: "hidden",
             }}>
-              {/* Card body */}
               <div style={{ padding: "16px 16px 14px" }}>
 
                 {/* Top row — square avatar + name block + badge */}
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 16 }}>
-
-                  {/* Square avatar */}
                   <div style={{
                     width: 54, height: 54, borderRadius: 14, background: accent,
                     flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
@@ -693,7 +746,6 @@ function UsersTab() {
                     boxShadow: `0 4px 16px ${accent}44`,
                   }}>{initials}</div>
 
-                  {/* Name + email */}
                   <div style={{ flex: 1, minWidth: 0, paddingTop: 2, textAlign: "left" }}>
                     <div style={{ fontSize: 15, fontWeight: 700, color: u.isBanned ? C.dim : C.text, marginBottom: 3, letterSpacing: "-0.2px" }}>
                       {u.name}
@@ -708,7 +760,6 @@ function UsersTab() {
                     )}
                   </div>
 
-                  {/* Status badge */}
                   <Badge status={st} />
                 </div>
 
@@ -858,10 +909,10 @@ export default function AdminDashboardPage() {
   const { logout } = useAuth();
   const navigate   = useNavigate();
 
-  const [activeTab, setActiveTab]           = useState("overview");
-  const [rejectionReasons, setReasons]      = useState([]);
-  const [pendingCount, setPendingCount]     = useState(0);
-  const [stats, setStats]                   = useState({
+  const [activeTab, setActiveTab]       = useState("overview");
+  const [rejectionReasons, setReasons]  = useState([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [stats, setStats]               = useState({
     activeJobs: null, onlineMechanics: null, pendingVerify: null, pendingReports: 0, recentActivity: []
   });
 
@@ -914,16 +965,16 @@ export default function AdminDashboardPage() {
         position: "sticky", top: 0, zIndex: 20,
       }}>
         <div style={{ display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 18, fontWeight: 800, color: C.red, letterSpacing: "-0.5px" }}>PitStop</span>
-          <span style={{
-            background: "#1c0608", border: `0.5px solid #3a0a0e`,
-            borderRadius: 20, padding: "2px 9px", fontSize: 9,
-            color: C.red, letterSpacing: "0.1em", fontWeight: 700,
-          }}>ADMIN</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 18, fontWeight: 800, color: C.red, letterSpacing: "-0.5px" }}>PitStop</span>
+            <span style={{
+              background: "#1c0608", border: `0.5px solid #3a0a0e`,
+              borderRadius: 20, padding: "2px 9px", fontSize: 9,
+              color: C.red, letterSpacing: "0.1em", fontWeight: 700,
+            }}>ADMIN</span>
+          </div>
+          <div style={{ fontSize: 10, color: C.dim, marginTop: 1, letterSpacing: "0.04em" }}>Admin Dashboard</div>
         </div>
-        <div style={{ fontSize: 10, color: C.dim, marginTop: 1, letterSpacing: "0.04em" }}>Admin Dashboard</div>
-      </div>
         <button className="adm-btn" onClick={handleLogout} style={{
           background: "transparent", border: `0.5px solid ${C.border2}`,
           color: C.dim, borderRadius: 8, padding: "5px 12px", fontSize: 11,

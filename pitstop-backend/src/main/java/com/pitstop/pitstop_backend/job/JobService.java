@@ -79,6 +79,7 @@ public class JobService {
         job.setLatitude(dto.getLatitude());
         job.setLongitude(dto.getLongitude());
         job.setAddress(dto.getAddress());
+        job.setPhotoUrl(dto.getPhotoUrl());
         job.setStatus(JobStatus.PENDING);
         job.setBroadcastRing(1);                               // new — start at ring 1
         job.setBroadcastStartedAt(java.time.LocalDateTime.now()); // new — scheduler needs this

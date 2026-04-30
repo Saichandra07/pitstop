@@ -9,6 +9,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import com.pitstop.pitstop_backend.config.CloudinaryService;
+import org.springframework.web.multipart.MultipartFile;
 import java.util.Optional;
 
 import java.util.List;
@@ -18,9 +20,11 @@ import java.util.List;
 public class JobController {
 
     private final JobService jobService;
+    private final CloudinaryService cloudinaryService;
 
-    public JobController(JobService jobService) {
+    public JobController(JobService jobService, CloudinaryService cloudinaryService) {
         this.jobService = jobService;
+        this.cloudinaryService = cloudinaryService;
     }
 
     // POST /api/jobs/sos — USER only (SecurityConfig)
@@ -28,6 +32,18 @@ public class JobController {
     public ResponseEntity<JobResponseDto> createSos(@Valid @RequestBody SosRequestDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(jobService.createSosRequest(getAccountId(), dto));
+    }
+
+    // POST /api/jobs/upload-photo — USER only, uploads image to Cloudinary
+    @PostMapping("/upload-photo")
+    public ResponseEntity<String> uploadPhoto(@RequestParam("file") MultipartFile file) {
+        try {
+            String url = cloudinaryService.upload(file);
+            return ResponseEntity.ok(url);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Photo upload failed: " + e.getMessage());
+        }
     }
 
     // GET /api/jobs — ADMIN only (SecurityConfig)

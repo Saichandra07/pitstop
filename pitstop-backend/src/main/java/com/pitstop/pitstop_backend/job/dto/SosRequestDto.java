@@ -27,6 +27,10 @@ public class SosRequestDto {
 
     private String address;
 
+    private String photoUrl;
+
+
+
     public VehicleType getVehicleType() { return vehicleType; }
     public void setVehicleType(VehicleType vehicleType) { this.vehicleType = vehicleType; }
 
@@ -47,4 +51,7 @@ public class SosRequestDto {
 
     public String getAddress() { return address; }
     public void setAddress(String address) { this.address = address; }
+
+    public String getPhotoUrl() { return photoUrl; }
+    public void setPhotoUrl(String photoUrl) { this.photoUrl = photoUrl; }
 }
