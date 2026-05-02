@@ -3,99 +3,65 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-function getGreeting() {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
-}
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getInitials(name = "") {
-  return name
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
 }
 
 const VEHICLE_LABELS = {
-  TWO_WHEELER: "2-Wheeler",
-  THREE_WHEELER: "3-Wheeler",
-  FOUR_WHEELER: "4-Wheeler",
-  SIX_PLUS_WHEELER: "6-Wheeler+",
+  TWO_WHEELER: "2-Wheeler", THREE_WHEELER: "3-Wheeler",
+  FOUR_WHEELER: "4-Wheeler", SIX_PLUS_WHEELER: "6-Wheeler+",
 };
 
 const PROBLEM_LABELS = {
-  BATTERY_DEAD: "Battery dead",
-  ENGINE_OVERHEATING: "Engine overheating",
-  ENGINE_WONT_START: "Engine won't start",
-  ENGINE_NOISE: "Engine noise",
-  OIL_LEAK: "Oil leak",
-  FLAT_TYRE: "Flat tyre / puncture",
-  TYRE_BURST: "Tyre burst",
-  CHAIN_SNAPPED: "Chain snapped",
-  BRAKE_FAILURE: "Brake failure",
-  BRAKE_NOISE: "Brake noise",
-  CLUTCH_FAILURE: "Clutch failure",
-  SUSPENSION_DAMAGE: "Suspension damage",
-  HEADLIGHTS_NOT_WORKING: "Headlights not working",
-  ACCIDENT_DAMAGE: "Accident damage",
-  VEHICLE_STUCK: "Vehicle stuck",
-  STRANGE_NOISE: "Strange noise / smell",
-  DONT_KNOW: "Don't know — just come",
-  GEAR_STUCK: "Gear stuck",
-  STEERING_LOCKED: "Steering locked",
-  WARNING_LIGHT: "Warning light on dashboard",
+  BATTERY_DEAD: "Battery dead", ENGINE_OVERHEATING: "Engine overheating",
+  ENGINE_WONT_START: "Engine won't start", ENGINE_NOISE: "Engine noise",
+  OIL_LEAK: "Oil leak", FLAT_TYRE: "Flat tyre / puncture", TYRE_BURST: "Tyre burst",
+  CHAIN_SNAPPED: "Chain snapped", BRAKE_FAILURE: "Brake failure", BRAKE_NOISE: "Brake noise",
+  CLUTCH_FAILURE: "Clutch failure", SUSPENSION_DAMAGE: "Suspension damage",
+  HEADLIGHTS_NOT_WORKING: "Headlights not working", ACCIDENT_DAMAGE: "Accident damage",
+  VEHICLE_STUCK: "Vehicle stuck", STRANGE_NOISE: "Strange noise / smell",
+  DONT_KNOW: "Don't know — just come", GEAR_STUCK: "Gear stuck",
+  STEERING_LOCKED: "Steering locked", WARNING_LIGHT: "Warning light on dashboard",
 };
 
-function vehicleLabel(v) { return VEHICLE_LABELS[v] || v; }
+const VEHICLE_EMOJI = {
+  TWO_WHEELER: "🛵", THREE_WHEELER: "🛺",
+  FOUR_WHEELER: "🚗", SIX_PLUS_WHEELER: "🚛",
+};
+
 function problemLabel(p) { return PROBLEM_LABELS[p] || p; }
-
-function formatDate(dateStr) {
-  if (!dateStr) return "";
-  return new Date(dateStr).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+function vehicleLabel(v) { return VEHICLE_LABELS[v] || v; }
+function formatDate(d) {
+  if (!d) return "";
+  return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
-
 function statusInfo(status) {
   switch (status) {
-    case "PENDING":
-      return { label: "Searching...", color: "#FAC775", bg: "rgba(250,199,117,0.12)" };
-    case "ACCEPTED":
-      return { label: "En route", color: "#61cd96", bg: "rgba(97,205,150,0.12)" };
-    case "IN_PROGRESS":
-      return { label: "In progress", color: "#61cd96", bg: "rgba(97,205,150,0.12)" };
-    default:
-      return { label: status, color: "#888", bg: "rgba(255,255,255,0.06)" };
+    case "PENDING":     return { label: "Searching...", color: "var(--gold)",  bg: "rgba(255,183,0,0.12)" };
+    case "ACCEPTED":    return { label: "En route",     color: "var(--green)", bg: "rgba(74,222,128,0.12)" };
+    case "IN_PROGRESS": return { label: "In progress",  color: "var(--green)", bg: "rgba(74,222,128,0.12)" };
+    default:            return { label: status,          color: "var(--text-2)", bg: "var(--surface3)" };
   }
 }
-
 function historyBadge(status) {
-  if (status === "COMPLETED")
-    return { label: "Completed", color: "#61cd96", bg: "rgba(97,205,150,0.1)" };
-  if (status === "CANCELLED")
-    return { label: "Cancelled", color: "#555", bg: "rgba(255,255,255,0.05)" };
-  return { label: status, color: "#888", bg: "rgba(255,255,255,0.06)" };
+  if (status === "COMPLETED") return { label: "Completed", color: "var(--green)", bg: "rgba(74,222,128,0.1)" };
+  if (status === "CANCELLED") return { label: "Cancelled",  color: "var(--text-3)", bg: "var(--surface3)" };
+  return { label: status, color: "var(--text-2)", bg: "var(--surface3)" };
 }
 
 const ACTIVE_STATUSES = ["PENDING", "ACCEPTED", "IN_PROGRESS"];
+const NAV_H           = 56;
+const SHEET_COLLAPSED = 120;
+const SHEET_EXPANDED  = 340;
 
-// ─── Heights (single source of truth) ───────────────────────────────────────
-// NAV_H: fixed bottom nav bar
-// SHEET_COLLAPSED: drag handle (28px) + SOS button (68px) + padding (16px)
-// SHEET_EXPANDED: collapsed + recent jobs section (~220px)
-const NAV_H = 56;
-const SHEET_COLLAPSED = 112;   // handle (28) + SOS button (68) + padding (16)
-const SHEET_EXPANDED  = 340;   // handle + SOS + recent cards section
-
-// ─── SVG icons (inline, no external dep) ────────────────────────────────────
+// ─── Icons ────────────────────────────────────────────────────────────────────
 
 const BellIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" stroke="#FAC775" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M13.73 21a2 2 0 0 1-3.46 0" stroke="#FAC775" strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" stroke="var(--gold)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M13.73 21a2 2 0 0 1-3.46 0" stroke="var(--gold)" strokeWidth="1.5" strokeLinecap="round"/>
   </svg>
 );
 
@@ -128,95 +94,196 @@ const ProfileIcon = () => (
 
 const SosAlertIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-    <circle cx="12" cy="12" r="10" stroke="#fff" strokeWidth="1.5"/>
-    <path d="M12 7v6M12 16.5v.5" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
+    <circle cx="12" cy="12" r="10" stroke="var(--text)" strokeWidth="1.5"/>
+    <path d="M12 7v6M12 16.5v.5" stroke="var(--text)" strokeWidth="2" strokeLinecap="round"/>
   </svg>
 );
 
-// ─── Map backgrounds ─────────────────────────────────────────────────────────
+// ─── Heartbeat Map ────────────────────────────────────────────────────────────
 
-// Idle map — fills entire screen, map adjusts bottom padding via prop
-function IdleMap({ bottomOffset }) {
+function HeartbeatMap({ bottomOffset }) {
+  const mechDots = [
+    { top: "20%", left: "13%" },
+    { top: "16%", left: "70%" },
+    { top: "58%", left: "80%" },
+    { top: "65%", left: "10%" },
+    { top: "35%", left: "85%" },
+    { top: "75%", left: "58%" },
+  ];
+
   return (
-    <div style={{ position: "absolute", inset: 0, background: "#0d1a0d" }}>
-      {/* dot grid */}
+    <div style={{ position: "absolute", inset: 0, background: "var(--bg)" }}>
+
+      <style>{`
+        @keyframes psRing {
+          0%   { transform: translate(-50%, -50%) scale(0.55); opacity: 1; }
+          100% { transform: translate(-50%, -50%) scale(1);    opacity: 0; }
+        }
+        .ps-r {
+          position: absolute;
+          border-radius: 50%;
+          pointer-events: none;
+          animation: psRing 3.2s ease-out infinite;
+        }
+        .ps-r1 { animation-delay: 0s;   }
+        .ps-r2 { animation-delay: 0.8s; }
+        .ps-r3 { animation-delay: 1.6s; }
+        .ps-r4 { animation-delay: 2.4s; }
+      `}</style>
+
+      {/* Gold grid */}
       <div style={{
-        position: "absolute", inset: 0,
-        backgroundImage: "radial-gradient(circle, #1b2e1b 1px, transparent 1px)",
-        backgroundSize: "18px 18px",
+        position: "absolute", inset: 0, opacity: 0.07,
+        backgroundImage: "linear-gradient(var(--gold) 1px,transparent 1px),linear-gradient(90deg,var(--gold) 1px,transparent 1px)",
+        backgroundSize: "24px 24px",
       }} />
-      {/* roads */}
-      <div style={{ position: "absolute", top: "38%", left: 0, right: 0, height: 2, background: "#1e321e", transform: "rotate(-3deg)" }} />
-      <div style={{ position: "absolute", top: "55%", left: 0, right: 0, height: 1.5, background: "#182818", transform: "rotate(-3deg)" }} />
-      <div style={{ position: "absolute", top: "70%", left: 0, right: 0, height: 1, background: "#141e14", transform: "rotate(-3deg)" }} />
-      <div style={{ position: "absolute", left: "62%", top: 0, bottom: 0, width: 1.5, background: "#1e321e" }} />
-      <div style={{ position: "absolute", left: "30%", top: 0, bottom: 0, width: 1, background: "#182818" }} />
-      {/* pulse rings */}
-      <div style={{ position: "absolute", top: "36%", left: "48%", transform: "translate(-50%,-50%)", width: 64, height: 64, borderRadius: "50%", border: "1px solid rgba(230,57,70,0.15)" }} />
-      <div style={{ position: "absolute", top: "36%", left: "48%", transform: "translate(-50%,-50%)", width: 40, height: 40, borderRadius: "50%", border: "1px solid rgba(230,57,70,0.10)" }} />
-      <div style={{ position: "absolute", top: "36%", left: "48%", transform: "translate(-50%,-50%)", width: 22, height: 22, borderRadius: "50%", background: "rgba(230,57,70,0.10)" }} />
-      {/* user pin */}
-      <div style={{ position: "absolute", top: "36%", left: "48%", transform: "translate(-50%,-50%)", width: 12, height: 12, borderRadius: "50%", background: "#E63946", boxShadow: "0 0 0 3px rgba(230,57,70,0.25)" }} />
-      {/* mechanic dots */}
-      {[{ top: "18%", left: "16%" }, { top: "42%", left: "72%" }, { top: "25%", left: "78%" }, { top: "52%", left: "22%" }].map((pos, i) => (
-        <div key={i} style={{ position: "absolute", ...pos, width: 7, height: 7, borderRadius: "50%", background: "#61cd96", opacity: 0.7 }} />
+
+      {/* Radial vignette */}
+      <div style={{
+        position: "absolute", inset: 0, pointerEvents: "none",
+        background: "radial-gradient(ellipse 75% 55% at 50% 43%, transparent 25%, rgba(10,10,15,0.75) 100%)",
+      }} />
+
+      {/* Pulse rings — thick, vibrant */}
+      {[
+        { size: 300, cls: "ps-r ps-r1", color: "rgba(255,183,0,0.55)", width: "2px"   },
+        { size: 220, cls: "ps-r ps-r2", color: "rgba(255,183,0,0.65)", width: "2.5px" },
+        { size: 145, cls: "ps-r ps-r3", color: "rgba(255,183,0,0.75)", width: "3px"   },
+        { size:  80, cls: "ps-r ps-r4", color: "rgba(255,183,0,0.85)", width: "3px"   },
+      ].map(({ size, cls, color, width }, i) => (
+        <div key={i} className={cls} style={{
+          top: "43%", left: "50%",
+          width: size, height: size,
+          border: `${width} solid ${color}`,
+          boxShadow: `0 0 12px ${color}`,
+        }} />
       ))}
-      {/* location label — sits just above the bottom sheet, moves with it */}
-      <div style={{ position: "absolute", bottom: bottomOffset + 12, left: 16, display: "flex", alignItems: "center", gap: 5, transition: "bottom 0.35s cubic-bezier(0.32,0.72,0,1)" }}>
-        <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#61cd96" }} />
-        <span style={{ fontSize: 10, color: "rgba(97,205,150,0.6)", letterSpacing: "0.07em", fontVariant: "all-small-caps" }}>Your location</span>
+
+      {/* Static faint outermost ring — depth */}
+      <div style={{
+        position: "absolute", top: "43%", left: "50%",
+        transform: "translate(-50%,-50%)",
+        width: 340, height: 340, borderRadius: "50%",
+        border: "1px solid rgba(255,183,0,0.08)",
+        pointerEvents: "none",
+      }} />
+
+      {/* Inner halo */}
+      <div style={{
+        position: "absolute", top: "43%", left: "50%",
+        transform: "translate(-50%,-50%)",
+        width: 56, height: 56, borderRadius: "50%",
+        background: "radial-gradient(circle, rgba(230,57,70,0.2) 0%, transparent 70%)",
+        border: "1.5px solid rgba(230,57,70,0.25)",
+        pointerEvents: "none",
+      }} />
+
+      {/* User dot */}
+      <div style={{
+        position: "absolute", top: "43%", left: "50%",
+        transform: "translate(-50%,-50%)",
+        width: 16, height: 16, borderRadius: "50%",
+        background: "var(--red)",
+        boxShadow: "0 0 0 5px rgba(230,57,70,0.25), 0 0 28px rgba(230,57,70,0.65)",
+        zIndex: 3,
+      }} />
+
+      {/* YOU label */}
+      <div style={{
+        position: "absolute", top: "43%", left: "50%",
+        transform: "translate(-50%, calc(-50% + 18px))",
+        marginTop: 8, zIndex: 3, pointerEvents: "none",
+        fontSize: 9, fontWeight: 700, letterSpacing: "2.5px",
+        textTransform: "uppercase", color: "rgba(230,57,70,0.5)",
+      }}>YOU</div>
+
+      {/* Mechanic dots */}
+      {mechDots.map((pos, i) => (
+        <div key={i} style={{
+          position: "absolute", ...pos,
+          width: 8, height: 8, borderRadius: "50%",
+          background: "var(--green)", opacity: 0.8,
+          boxShadow: "0 0 10px rgba(74,222,128,0.7)",
+        }} />
+      ))}
+
+      {/* Nearby counter */}
+      <div style={{
+        position: "absolute", top: 78, right: 16,
+        background: "rgba(17,17,24,0.88)",
+        border: "1px solid rgba(74,222,128,0.25)",
+        borderRadius: 12, padding: "8px 12px",
+        backdropFilter: "blur(6px)", textAlign: "center",
+      }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: "var(--green)", lineHeight: 1 }}>6</div>
+        <div style={{ fontSize: 9, color: "var(--text-3)", letterSpacing: "1px", textTransform: "uppercase", marginTop: 3 }}>nearby</div>
+      </div>
+
+      {/* Location label */}
+      <div style={{
+        position: "absolute", left: 16,
+        bottom: bottomOffset + 14,
+        display: "flex", alignItems: "center", gap: 5,
+        transition: "bottom 0.35s cubic-bezier(0.32,0.72,0,1)",
+      }}>
+        <div style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--green)" }} />
+        <span style={{ fontSize: 10, color: "rgba(74,222,128,0.6)", letterSpacing: "0.07em", fontVariant: "all-small-caps" }}>
+          Your location
+        </span>
       </div>
     </div>
   );
 }
 
-// Active job map
+// ─── Active Map ───────────────────────────────────────────────────────────────
+
 function ActiveMap({ bottomOffset }) {
   return (
-    <div style={{ position: "absolute", inset: 0, background: "#0d1a0d" }}>
+    <div style={{ position: "absolute", inset: 0, background: "var(--bg)" }}>
       <div style={{
-        position: "absolute", inset: 0,
-        backgroundImage: "radial-gradient(circle, #1b2e1b 1px, transparent 1px)",
-        backgroundSize: "18px 18px",
+        position: "absolute", inset: 0, opacity: 0.07,
+        backgroundImage: "linear-gradient(var(--gold) 1px,transparent 1px),linear-gradient(90deg,var(--gold) 1px,transparent 1px)",
+        backgroundSize: "24px 24px",
       }} />
-      <div style={{ position: "absolute", top: "38%", left: 0, right: 0, height: 2, background: "#1e321e", transform: "rotate(-3deg)" }} />
-      <div style={{ position: "absolute", top: "55%", left: 0, right: 0, height: 1.5, background: "#182818", transform: "rotate(-3deg)" }} />
-      <div style={{ position: "absolute", top: "70%", left: 0, right: 0, height: 1, background: "#141e14", transform: "rotate(-3deg)" }} />
-      <div style={{ position: "absolute", left: "62%", top: 0, bottom: 0, width: 1.5, background: "#1e321e" }} />
-      <div style={{ position: "absolute", left: "30%", top: 0, bottom: 0, width: 1, background: "#182818" }} />
-      {/* dashed route */}
+      <div style={{ position: "absolute", top: "38%", left: 0, right: 0, height: 2, background: "var(--surface2)", transform: "rotate(-3deg)" }} />
+      <div style={{ position: "absolute", top: "55%", left: 0, right: 0, height: 1.5, background: "var(--surface)", transform: "rotate(-3deg)" }} />
+      <div style={{ position: "absolute", left: "62%", top: 0, bottom: 0, width: 1.5, background: "var(--surface2)" }} />
+      <div style={{ position: "absolute", left: "30%", top: 0, bottom: 0, width: 1, background: "var(--surface)" }} />
       <svg style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }} viewBox="0 0 360 720">
-        <path d="M 126 202 Q 160 260 173 259" stroke="#E63946" strokeWidth="2.5" fill="none" strokeDasharray="5,4" strokeLinecap="round" opacity="0.5"/>
+        <path d="M 126 202 Q 160 260 173 259" stroke="var(--red)" strokeWidth="2.5" fill="none" strokeDasharray="5,4" strokeLinecap="round" opacity="0.5"/>
       </svg>
-      {/* user pin */}
-      <div style={{ position: "absolute", top: "36%", left: "48%", transform: "translate(-50%,-50%)", width: 12, height: 12, borderRadius: "50%", background: "#E63946", boxShadow: "0 0 0 3px rgba(230,57,70,0.25)" }} />
-      {/* mechanic dot (yellow) */}
-      <div style={{ position: "absolute", top: "28%", left: "35%", width: 14, height: 14, borderRadius: "50%", background: "#FAC775", boxShadow: "0 0 0 4px rgba(250,199,117,0.2)" }} />
-      {/* ETA chip */}
-      <div style={{ position: "absolute", top: "22%", left: "28%", background: "rgba(20,20,20,0.88)", border: "0.5px solid #2a2a2a", borderRadius: 8, padding: "5px 10px", fontSize: 11, color: "#FAC775", fontWeight: 600, backdropFilter: "blur(4px)" }}>
+      <div style={{ position: "absolute", top: "36%", left: "48%", transform: "translate(-50%,-50%)", width: 12, height: 12, borderRadius: "50%", background: "var(--red)", boxShadow: "0 0 0 3px rgba(230,57,70,0.25)" }} />
+      <div style={{ position: "absolute", top: "28%", left: "35%", width: 14, height: 14, borderRadius: "50%", background: "var(--gold)", boxShadow: "0 0 0 4px rgba(255,183,0,0.2)" }} />
+      <div style={{ position: "absolute", top: "22%", left: "28%", background: "rgba(17,17,24,0.9)", border: "0.5px solid var(--border)", borderRadius: 8, padding: "5px 10px", fontSize: 11, color: "var(--gold)", fontWeight: 600, backdropFilter: "blur(4px)" }}>
         ~8 mins away
+      </div>
+      <div style={{
+        position: "absolute", left: 16, bottom: bottomOffset + 14,
+        display: "flex", alignItems: "center", gap: 5,
+        transition: "bottom 0.35s cubic-bezier(0.32,0.72,0,1)",
+      }}>
+        <div style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--green)" }} />
+        <span style={{ fontSize: 10, color: "rgba(74,222,128,0.6)", letterSpacing: "0.07em", fontVariant: "all-small-caps" }}>Your location</span>
       </div>
     </div>
   );
 }
 
-// ─── Main Component ──────────────────────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const [activeJob, setActiveJob] = useState(null);
-  const [history, setHistory] = useState([]);
+  const [activeJob, setActiveJob]       = useState(null);
+  const [history, setHistory]           = useState([]);
   const [sheetExpanded, setSheetExpanded] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  // Drag state
+  const [loading, setLoading]           = useState(true);
   const [showLogoutSheet, setShowLogoutSheet] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const [dragStartY, setDragStartY] = useState(null);
-  const [dragStartH, setDragStartH] = useState(null);
-  const [liveSheetH, setLiveSheetH] = useState(null);
+  const [dragging, setDragging]         = useState(false);
+  const [dragStartY, setDragStartY]     = useState(null);
+  const [dragStartH, setDragStartH]     = useState(null);
+  const [liveSheetH, setLiveSheetH]     = useState(null);
 
   const fetchActive = useCallback(async () => {
     try {
@@ -226,18 +293,14 @@ export default function DashboardPage() {
         ? jobs.find((j) => ACTIVE_STATUSES.includes(j.status))
         : ACTIVE_STATUSES.includes(jobs?.status) ? jobs : null;
       setActiveJob(found || null);
-    } catch {
-      setActiveJob(null);
-    }
+    } catch { setActiveJob(null); }
   }, []);
 
   const fetchHistory = useCallback(async () => {
     try {
       const res = await api.get("/jobs/my/history");
       setHistory((res.data || []).slice(0, 2));
-    } catch {
-      setHistory([]);
-    }
+    } catch { setHistory([]); }
   }, []);
 
   useEffect(() => {
@@ -262,127 +325,67 @@ export default function DashboardPage() {
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
-  };
-
-  // ── Drag handlers ───────────────────────────────────────────────────────────
-  // Works for both real touch (phone) and mouse drag (Chrome emulator)
-  // During drag: liveSheetH tracks height in real-time (no transition)
-  // On release: snaps to COLLAPSED or EXPANDED based on where you let go
+  const handleLogout = () => { logout(); navigate("/login"); };
 
   const snapHeight = sheetExpanded ? SHEET_EXPANDED : SHEET_COLLAPSED;
 
-  function startDrag(startY) {
-    setDragging(true);
-    setDragStartY(startY);
-    setDragStartH(snapHeight);
-    setLiveSheetH(snapHeight);
-  }
+  function startDrag(y) { setDragging(true); setDragStartY(y); setDragStartH(snapHeight); setLiveSheetH(snapHeight); }
+  function moveDrag(y)  { if (!dragging || dragStartY === null) return; const d = dragStartY - y; setLiveSheetH(Math.min(SHEET_EXPANDED, Math.max(SHEET_COLLAPSED, dragStartH + d))); }
+  function endDrag(y)   { if (!dragging) return; const d = dragStartY - y; if (d > 40) setSheetExpanded(true); else if (d < -40) setSheetExpanded(false); setLiveSheetH(null); setDragging(false); setDragStartY(null); setDragStartH(null); }
 
-  function moveDrag(currentY) {
-    if (!dragging || dragStartY === null) return;
-    const delta = dragStartY - currentY;          // positive = dragging up
-    const newH = Math.min(SHEET_EXPANDED, Math.max(SHEET_COLLAPSED, dragStartH + delta));
-    setLiveSheetH(newH);
-  }
-
-  function endDrag(currentY) {
-    if (!dragging) return;
-    const delta = dragStartY - currentY;
-    if (delta > 40) setSheetExpanded(true);
-    else if (delta < -40) setSheetExpanded(false);
-    // else snap back to wherever it was
-    setLiveSheetH(null);   // return to snapped value
-    setDragging(false);
-    setDragStartY(null);
-    setDragStartH(null);
-  }
-
-  // Touch events (real phone)
-  const handleTouchStart = (e) => startDrag(e.touches[0].clientY);
-  const handleTouchMove  = (e) => moveDrag(e.touches[0].clientY);
-  const handleTouchEnd   = (e) => endDrag(e.changedTouches[0].clientY);
-
-  // Mouse events (Chrome emulator)
-  const handleMouseDown  = (e) => startDrag(e.clientY);
-  const handleMouseMove  = (e) => moveDrag(e.clientY);
-  const handleMouseUp    = (e) => endDrag(e.clientY);
-
-  const firstName = user?.name?.split(" ")[0] || "there";
-  const initials = getInitials(user?.name || "");
-  const si = activeJob ? statusInfo(activeJob.status) : null;
+  const firstName  = user?.name?.split(" ")[0] || "there";
+  const initials   = getInitials(user?.name || "");
+  const si         = activeJob ? statusInfo(activeJob.status) : null;
   const hasActiveJob = !!activeJob;
 
-  // Sheet height: use live drag value during drag, snapped value otherwise
-  const idleSheetH = liveSheetH !== null ? liveSheetH : (sheetExpanded ? SHEET_EXPANDED : SHEET_COLLAPSED);
-  const activeJobSheetH = hasActiveJob
-    ? (activeJob.status === "PENDING" ? 180 : 260)
-    : idleSheetH;
-
-  const mapBottomOffset = activeJobSheetH + NAV_H;
+  const idleSheetH      = liveSheetH !== null ? liveSheetH : (sheetExpanded ? SHEET_EXPANDED : SHEET_COLLAPSED);
+  const activeSheetH    = hasActiveJob ? (activeJob.status === "PENDING" ? 180 : 260) : idleSheetH;
+  const mapBottomOffset = activeSheetH + NAV_H;
 
   return (
-    <div style={{
-      position: "relative",
-      width: "100%",
-      height: "100dvh",
-      overflow: "hidden",
-      background: "#141414",
-      fontFamily: "'Inter', sans-serif",
-    }}>
-
-      {/* ── Map — fills full screen, label adjusts via bottomOffset ── */}
+    <div
+      style={{ position: "relative", width: "100%", height: "100dvh", overflow: "hidden", background: "var(--bg)", fontFamily: "'Inter',sans-serif" }}
+      onMouseMove={(e) => dragging && moveDrag(e.clientY)}
+      onMouseUp={(e)   => dragging && endDrag(e.clientY)}
+    >
+      {/* Map layer */}
       {hasActiveJob
         ? <ActiveMap bottomOffset={mapBottomOffset} />
-        : <IdleMap bottomOffset={mapBottomOffset} />
+        : <HeartbeatMap bottomOffset={mapBottomOffset} />
       }
 
-      {/* ── Topbar — floats over map, single row ── */}
+      {/* ── TopBar ── */}
       <div style={{
-        position: "absolute", top: 0, left: 0, right: 0,
+        position: "absolute", top: 0, left: 0, right: 0, zIndex: 10,
         display: "flex", justifyContent: "space-between", alignItems: "center",
         padding: "20px 16px 28px",
-        background: "linear-gradient(180deg, rgba(13,26,13,0.95) 0%, rgba(13,26,13,0.0) 100%)",
-        zIndex: 10,
+        background: "linear-gradient(180deg, rgba(10,10,15,0.95) 0%, rgba(10,10,15,0) 100%)",
       }}>
-
-        {/* Logo — left */}
+        {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <div style={{
-            width: 28, height: 28, background: "#E63946", borderRadius: 8,
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          }}>
+          <div style={{ width: 28, height: 28, background: "var(--red)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <svg width="13" height="13" viewBox="0 0 12 12" fill="none">
               <polygon points="6,1 11,10 1,10" fill="white" />
             </svg>
           </div>
-          <span style={{ fontSize: 17, fontWeight: 700, color: "#fff", letterSpacing: 0.2 }}>
-            PitStop
-          </span>
+          <span style={{ fontSize: 17, fontWeight: 700, color: "var(--text)", letterSpacing: 0.2 }}>PitStop</span>
         </div>
 
-        {/* Greeting pill — center */}
+        {/* Greeting pill */}
         <div style={{
-          background: "rgba(255,255,255,0.07)",
-          border: "0.5px solid rgba(255,255,255,0.1)",
-          borderRadius: 20,
-          padding: "5px 12px",
+          background: "rgba(255,255,255,0.06)", border: "0.5px solid var(--border)",
+          borderRadius: 20, padding: "5px 12px",
           display: "flex", alignItems: "center", gap: 5,
         }}>
-          <span style={{ fontSize: 13 }}>👋 Welcome </span>
-          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", fontWeight: 500 }}>
-            {firstName}
-          </span>
+          <span style={{ fontSize: 13 }}>👋</span>
+          <span style={{ fontSize: 12, color: "var(--text-2)", fontWeight: 500 }}>{firstName}</span>
         </div>
 
-        {/* Bell + Avatar — right */}
+        {/* Bell + Avatar */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{
             width: 36, height: 36, borderRadius: "50%",
-            background: "rgba(20,20,20,0.75)",
-            border: "0.5px solid rgba(255,255,255,0.08)",
+            background: "rgba(17,17,24,0.8)", border: "0.5px solid var(--border)",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
             <BellIcon />
@@ -390,236 +393,165 @@ export default function DashboardPage() {
           <div
             onClick={() => setShowLogoutSheet(true)}
             style={{
-              width: 36, height: 36, borderRadius: "50%",
-              background: "#E63946",
+              width: 36, height: 36, borderRadius: "50%", background: "var(--red)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 12, fontWeight: 700, color: "#fff",
-              letterSpacing: "0.04em", cursor: "pointer",
-              userSelect: "none",
+              fontSize: 12, fontWeight: 700, color: "var(--text)",
+              letterSpacing: "0.04em", cursor: "pointer", userSelect: "none",
             }}
-          >
-            {initials}
-          </div>
+          >{initials}</div>
         </div>
-
       </div>
 
-      {/* ── Bottom Sheet — sits above nav, snaps between heights ── */}
+      {/* ── Bottom Sheet ── */}
       <div
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onTouchStart={(e) => startDrag(e.touches[0].clientY)}
+        onTouchMove={(e)  => moveDrag(e.touches[0].clientY)}
+        onTouchEnd={(e)   => endDrag(e.changedTouches[0].clientY)}
+        onMouseDown={(e)  => startDrag(e.clientY)}
         style={{
-          position: "absolute",
-          left: 0, right: 0,
-          bottom: NAV_H,
-          height: activeJobSheetH,
-          background: "#141414",
+          position: "absolute", left: 0, right: 0, bottom: NAV_H,
+          height: activeSheetH,
+          background: "var(--bg)",
           borderRadius: "24px 24px 0 0",
-          padding: "10px 16px",
-          zIndex: 20,
-          overflow: "hidden",
-          // Only animate when NOT actively dragging (snap on release)
+          padding: "10px 16px 16px",
+          zIndex: 20, overflow: "hidden",
           transition: dragging ? "none" : "height 0.35s cubic-bezier(0.32,0.72,0,1)",
-          boxShadow: "0 -1px 0 0 #1e1e1e",
-          userSelect: "none",
-          cursor: dragging ? "grabbing" : "default",
+          boxShadow: "0 -1px 0 0 var(--border)",
+          userSelect: "none", cursor: dragging ? "grabbing" : "default",
         }}
       >
-        {/* Drag handle — only shown on idle (active job sheet doesn't expand) */}
+        {/* Drag handle — idle only */}
         {!hasActiveJob && (
-          <div
-            onClick={() => setSheetExpanded((v) => !v)}
-            style={{ display: "flex", justifyContent: "center", paddingBottom: 14, cursor: "pointer" }}
-          >
-            <div style={{ width: 36, height: 4, borderRadius: 2, background: "#2a2a2a" }} />
+          <div onClick={() => setSheetExpanded((v) => !v)} style={{ display: "flex", justifyContent: "center", paddingBottom: 10, cursor: "pointer" }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--surface3)" }} />
           </div>
         )}
 
-        {/* ── NO ACTIVE JOB: SOS button ── */}
+        {/* ── Idle state ── */}
         {!hasActiveJob && (
           <>
+            {/* SOS Button */}
             <button
               onClick={() => navigate("/sos")}
               style={{
-                width: "100%",
-                background: "#E63946",
-                border: "none",
-                borderRadius: 16,
-                padding: "0 20px",
-                height: 68,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                cursor: "pointer",
+                width: "100%", background: "var(--red)", border: "none", borderRadius: 16,
+                padding: "0 20px", height: 64,
+                display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer",
               }}
             >
               <div style={{ textAlign: "left" }}>
-                <div style={{ fontSize: 17, fontWeight: 700, color: "#fff", letterSpacing: "-0.2px" }}>SOS — Need help</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 3 }}>Tap to request a mechanic</div>
+                <div style={{ fontSize: 17, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.2px" }}>SOS — Need help</div>
+                <div style={{ fontSize: 12, color: "rgba(240,240,240,0.45)", marginTop: 3 }}>Tap to request a mechanic</div>
               </div>
               <div style={{
                 width: 44, height: 44, borderRadius: "50%",
-                background: "rgba(255,255,255,0.13)",
-                border: "0.5px solid rgba(255,255,255,0.15)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                flexShrink: 0,
+                background: "rgba(255,255,255,0.13)", border: "0.5px solid rgba(255,255,255,0.15)",
+                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
               }}>
                 <SosAlertIcon />
               </div>
             </button>
 
-            {/* Last job strip — visible in collapsed state */}
+            {/* Last job strip */}
             {history.length > 0 ? (
               <div
                 onClick={() => navigate("/history")}
                 style={{
                   display: "flex", alignItems: "center", gap: 10,
-                  padding: "10px 12px",
-                  background: "#1a1a1a",
-                  borderRadius: 12,
-                  border: "0.5px solid #222",
-                  marginTop: 10,
-                  cursor: "pointer",
+                  padding: "10px 12px", background: "var(--surface)",
+                  borderRadius: 12, border: "1px solid var(--border)", marginTop: 10, cursor: "pointer",
                 }}
               >
-                <div style={{
-                  width: 34, height: 34, borderRadius: "50%",
-                  background: "#242424",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 17, flexShrink: 0,
-                }}>
-                  {{ TWO_WHEELER: "🛵", THREE_WHEELER: "🛺", FOUR_WHEELER: "🚗", SIX_PLUS_WHEELER: "🚛" }[history[0].vehicleType] || "🚗"}
+                <div style={{ width: 34, height: 34, borderRadius: "50%", background: "var(--surface2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, flexShrink: 0 }}>
+                  {VEHICLE_EMOJI[history[0].vehicleType] || "🚗"}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#d0d0d0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {problemLabel(history[0].problemType)} · {history[0].vehicleName}
                   </div>
-                  <div style={{ fontSize: 11, color: "#484848", marginTop: 2 }}>
-                    {formatDate(history[0].createdAt)}
-                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{formatDate(history[0].createdAt)}</div>
                 </div>
-                <span style={{ fontSize: 11, color: "#61cd96", fontWeight: 600, flexShrink: 0 }}>Done</span>
-                <span style={{ color: "#333", fontSize: 14, flexShrink: 0 }}>›</span>
+                <span style={{ fontSize: 11, color: "var(--green)", fontWeight: 600, flexShrink: 0 }}>Done</span>
+                <span style={{ color: "var(--text-3)", fontSize: 14, flexShrink: 0 }}>›</span>
               </div>
             ) : (
-              <div style={{ fontSize: 12, color: "#333", textAlign: "center", paddingTop: 8, paddingBottom: 2 }}>
+              <div style={{ fontSize: 12, color: "var(--text-3)", textAlign: "center", paddingTop: 10 }}>
                 Your first SOS is one tap away
               </div>
             )}
 
-            {/* Recent requests — only when expanded */}
-            {sheetExpanded && (
-              history.length > 0 ? (
-                <>
-                  <div style={{ fontSize: 10, color: "#3a3a3a", letterSpacing: "0.09em", textTransform: "uppercase", fontWeight: 500, margin: "16px 0 8px" }}>
-                    Recent requests
-                  </div>
-                  {history.map((job) => {
-                    const badge = historyBadge(job.status);
-                    return (
-                      <div key={job.id} style={{
-                        background: "#1a1a1a",
-                        border: "0.5px solid #222",
-                        borderRadius: 12,
-                        padding: "11px 14px",
-                        marginBottom: 8,
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                      }}>
-                        <div>
-                          <div style={{ fontSize: 13, color: "#d0d0d0", fontWeight: 500 }}>{problemLabel(job.problemType)}</div>
-                          <div style={{ fontSize: 11, color: "#484848", marginTop: 3 }}>
-                            {vehicleLabel(job.vehicleType)} · {job.vehicleName} · {formatDate(job.createdAt)}
-                          </div>
+            {/* Expanded: recent jobs */}
+            {sheetExpanded && history.length > 0 && (
+              <>
+                <div style={{ fontSize: 10, color: "var(--text-3)", letterSpacing: "1px", textTransform: "uppercase", fontWeight: 600, margin: "16px 0 8px" }}>
+                  Recent requests
+                </div>
+                {history.map((job) => {
+                  const badge = historyBadge(job.status);
+                  return (
+                    <div key={job.id} style={{
+                      background: "var(--surface)", border: "1px solid var(--border)",
+                      borderRadius: 12, padding: "11px 14px", marginBottom: 8,
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                    }}>
+                      <div>
+                        <div style={{ fontSize: 13, color: "var(--text)", fontWeight: 500 }}>{problemLabel(job.problemType)}</div>
+                        <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 3 }}>
+                          {vehicleLabel(job.vehicleType)} · {job.vehicleName} · {formatDate(job.createdAt)}
                         </div>
-                        <span style={{ fontSize: 10, fontWeight: 600, background: badge.bg, color: badge.color, borderRadius: 20, padding: "3px 9px", whiteSpace: "nowrap" }}>
-                          {badge.label}
-                        </span>
                       </div>
-                    );
-                  })}
-                </>
-              ) : null
+                      <span style={{ fontSize: 10, fontWeight: 600, background: badge.bg, color: badge.color, borderRadius: 9999, padding: "3px 9px", whiteSpace: "nowrap" }}>
+                        {badge.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </>
             )}
           </>
         )}
 
-        {/* ── ACTIVE JOB: job card ── */}
+        {/* ── Active job card ── */}
         {hasActiveJob && (
-          <div style={{
-            background: "#1a1a1a",
-            border: "0.5px solid #252525",
-            borderRadius: 16,
-            padding: 14,
-          }}>
-            {/* Eyebrow */}
-            <div style={{ fontSize: 10, color: "#484848", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 500, marginBottom: 10 }}>
+          <div style={{ background: "var(--surface)", border: "1px solid rgba(255,183,0,0.3)", borderRadius: 16, padding: 14 }}>
+            <div style={{ fontSize: 10, color: "var(--text-3)", letterSpacing: "1px", textTransform: "uppercase", fontWeight: 600, marginBottom: 10 }}>
               Active request
             </div>
-            {/* Title row */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "#f0f0f0" }}>{problemLabel(activeJob.problemType)}</div>
-                <div style={{ fontSize: 12, color: "#555", marginTop: 3 }}>
-                  {vehicleLabel(activeJob.vehicleType)} · {activeJob.vehicleName}
-                </div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text)" }}>{problemLabel(activeJob.problemType)}</div>
+                <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 3 }}>{vehicleLabel(activeJob.vehicleType)} · {activeJob.vehicleName}</div>
               </div>
-              <span style={{ fontSize: 10, fontWeight: 600, background: si.bg, color: si.color, borderRadius: 20, padding: "4px 10px", whiteSpace: "nowrap" }}>
+              <span style={{ fontSize: 10, fontWeight: 600, background: si.bg, color: si.color, borderRadius: 9999, padding: "4px 10px", whiteSpace: "nowrap" }}>
                 {si.label}
               </span>
             </div>
-
-            {/* Mechanic row — only when ACCEPTED or IN_PROGRESS */}
             {(activeJob.status === "ACCEPTED" || activeJob.status === "IN_PROGRESS") && (
-              <div style={{
-                display: "flex", alignItems: "center", gap: 10,
-                background: "#111", borderRadius: 12,
-                padding: "9px 12px", marginBottom: 10,
-              }}>
-                <div style={{
-                  width: 30, height: 30, borderRadius: "50%",
-                  background: "#252525", border: "0.5px solid #333",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 11, fontWeight: 600, color: "#666", flexShrink: 0,
-                }}>M</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--surface2)", borderRadius: 12, padding: "9px 12px", marginBottom: 10 }}>
+                <div style={{ width: 30, height: 30, borderRadius: "50%", background: "var(--surface3)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, color: "var(--text-3)", flexShrink: 0 }}>M</div>
                 <div>
-                  <div style={{ fontSize: 13, color: "#d0d0d0", fontWeight: 500 }}>Mechanic assigned</div>
-                  <div style={{ fontSize: 11, color: "#484848", marginTop: 2 }}>
+                  <div style={{ fontSize: 13, color: "var(--text)", fontWeight: 500 }}>Mechanic assigned</div>
+                  <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>
                     {activeJob.status === "IN_PROGRESS" ? "Working on your vehicle" : "On the way to you"}
                   </div>
                 </div>
               </div>
             )}
-
-            {/* Action buttons */}
             <div style={{ display: "flex", gap: 8 }}>
               {(activeJob.status === "ACCEPTED" || activeJob.status === "IN_PROGRESS") && (
-                <button
-                  style={{
-                    flex: 1, height: 40, borderRadius: 10,
-                    background: "rgba(97,205,150,0.1)",
-                    border: "0.5px solid rgba(97,205,150,0.2)",
-                    color: "#61cd96", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                  }}
-                  onClick={() => {/* phone number not available yet — Step 14 */}}
-                >
+                <button style={{
+                  flex: 1, height: 40, borderRadius: 10,
+                  background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.2)",
+                  color: "var(--green)", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                }}>
                   <PhoneIcon /> Call mechanic
                 </button>
               )}
               {(activeJob.status === "PENDING" || activeJob.status === "ACCEPTED") && (
                 <button
-                  style={{
-                    flex: 1, height: 40, borderRadius: 10,
-                    background: "transparent",
-                    border: "0.5px solid #2a2a2a",
-                    color: "#555", fontSize: 12, cursor: "pointer",
-                  }}
                   onClick={() => handleCancel(activeJob.id, activeJob.status)}
+                  style={{ flex: 1, height: 40, borderRadius: 10, background: "transparent", border: "1px solid var(--border)", color: "var(--text-3)", fontSize: 12, cursor: "pointer" }}
                 >
                   Cancel
                 </button>
@@ -629,34 +561,21 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* ── Bottom Nav — fixed to screen, completely independent of sheet ── */}
+      {/* ── Bottom Nav ── */}
       <div style={{
-        position: "absolute",
-        bottom: 0, left: 0, right: 0,
-        height: NAV_H,
+        position: "absolute", bottom: 0, left: 0, right: 0, height: NAV_H,
         display: "flex", justifyContent: "space-around", alignItems: "center",
-        background: "#111",
-        borderTop: "0.5px solid #1e1e1e",
-        zIndex: 30,
-        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+        background: "var(--surface)", borderTop: "1px solid var(--border)",
+        zIndex: 30, paddingBottom: "env(safe-area-inset-bottom,0px)",
       }}>
         {[
-          { label: "SOS", icon: <SosNavIcon />, path: "/dashboard" },
-          { label: "History", icon: <HistoryIcon />, path: "/history" },
-          { label: "Profile", icon: <ProfileIcon />, path: "/profile" },
+          { label: "SOS",     icon: <SosNavIcon />,  path: "/dashboard" },
+          { label: "History", icon: <HistoryIcon />, path: "/history"   },
+          { label: "Profile", icon: <ProfileIcon />, path: "/profile"   },
         ].map(({ label, icon, path }) => {
           const active = window.location.pathname === path;
           return (
-            <div
-              key={label}
-              onClick={() => navigate(path)}
-              style={{
-                display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-                color: active ? "#E63946" : "#2e2e2e",
-                cursor: "pointer",
-                padding: "4px 16px",
-              }}
-            >
+            <div key={label} onClick={() => navigate(path)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: active ? "var(--red)" : "var(--text-3)", cursor: "pointer", padding: "4px 16px" }}>
               {icon}
               <span style={{ fontSize: 10, fontWeight: 500 }}>{label}</span>
             </div>
@@ -664,19 +583,18 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* Logout sheet */}
+      {/* ── Logout sheet ── */}
       {showLogoutSheet && (
         <div style={{ position: "absolute", inset: 0, zIndex: 100 }}>
           <div onClick={() => setShowLogoutSheet(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)" }} />
-          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "#1a1a1a", borderRadius: "20px 20px 0 0", padding: "24px 20px 36px", zIndex: 101 }}>
-            <p style={{ color: "#fff", fontWeight: 600, fontSize: 16, marginBottom: 6 }}>Log out?</p>
-            <p style={{ color: "#555", fontSize: 13, marginBottom: 24 }}>You'll need to sign in again to use PitStop.</p>
-            <button onClick={handleLogout} style={{ width: "100%", height: 48, borderRadius: 12, background: "#E63946", border: "none", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", marginBottom: 10 }}>Log out</button>
-            <button onClick={() => setShowLogoutSheet(false)} style={{ width: "100%", height: 48, borderRadius: 12, background: "transparent", border: "0.5px solid #2a2a2a", color: "#555", fontSize: 14, cursor: "pointer" }}>Cancel</button>
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "var(--surface)", borderRadius: "20px 20px 0 0", padding: "24px 20px 36px", zIndex: 101 }}>
+            <p style={{ color: "var(--text)", fontWeight: 600, fontSize: 16, marginBottom: 6 }}>Log out?</p>
+            <p style={{ color: "var(--text-3)", fontSize: 13, marginBottom: 24 }}>You'll need to sign in again to use PitStop.</p>
+            <button onClick={handleLogout} style={{ width: "100%", height: 48, borderRadius: 12, background: "var(--red)", border: "none", color: "var(--text)", fontSize: 14, fontWeight: 600, cursor: "pointer", marginBottom: 10 }}>Log out</button>
+            <button onClick={() => setShowLogoutSheet(false)} style={{ width: "100%", height: 48, borderRadius: 12, background: "transparent", border: "1px solid var(--border)", color: "var(--text-3)", fontSize: 14, cursor: "pointer" }}>Cancel</button>
           </div>
         </div>
       )}
-
     </div>
   );
 }
