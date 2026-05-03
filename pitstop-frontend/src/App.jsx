@@ -1,5 +1,5 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import LoginPage from './pages/LoginPage';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';import LoginPage from './pages/LoginPage';
+import { useAuth } from './context/AuthContext';
 import RegisterPage from './pages/RegisterPage';
 import MechanicRegisterPage from './pages/MechanicRegisterPage';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -13,6 +13,15 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
 import SOSWizardPage from './pages/SOSWizardPage';
+
+
+function RootRedirect() {
+  const { token, user } = useAuth();
+  if (!token) return <Navigate to="/login" replace />;
+  if (user?.role === 'MECHANIC') return <Navigate to="/mechanic/dashboard" replace />;
+  if (user?.role === 'ADMIN') return <Navigate to="/admin/dashboard" replace />;
+  return <Navigate to="/dashboard" replace />;
+}
 
 function App() {
   return (
@@ -76,7 +85,7 @@ function App() {
           </div>
         } />
 
-        <Route path="/" element={<LoginPage />} />
+        <Route path="/" element={<RootRedirect />} />
 
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />

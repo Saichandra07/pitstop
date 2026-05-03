@@ -1,28 +1,21 @@
-// src/components/JobCard.jsx
-
 import Badge from './Badge';
 
-const PROBLEM_EMOJI = {
-  FLAT_TYRE:            { icon: '🛞', color: 'gold' },
-  TYRE_BURST:           { icon: '🛞', color: 'red'  },
-  BATTERY_DEAD:         { icon: '🔋', color: 'gold' },
-  ENGINE_WONT_START:    { icon: '🔧', color: 'red'  },
-  ENGINE_NOISE:         { icon: '🔧', color: 'gold' },
-  ENGINE_OVERHEATING:   { icon: '🌡️', color: 'red'  },
-  OIL_LEAK:             { icon: '🛢️', color: 'gold' },
-  CHAIN_SNAPPED:        { icon: '⛓️', color: 'red'  },
-  BRAKE_FAILURE:        { icon: '🛑', color: 'red'  },
-  BRAKE_NOISE:          { icon: '🛑', color: 'gold' },
-  CLUTCH_FAILURE:       { icon: '⚙️', color: 'gold' },
-  SUSPENSION_DAMAGE:    { icon: '🔩', color: 'gold' },
-  HEADLIGHTS_NOT_WORKING:{ icon: '💡', color: 'gold' },
-  ACCIDENT_DAMAGE:      { icon: '🚗', color: 'red'  },
-  VEHICLE_STUCK:        { icon: '🆘', color: 'red'  },
-  STRANGE_NOISE:        { icon: '❓', color: 'gold' },
-  DONT_KNOW:            { icon: '❓', color: 'muted'},
-  GEAR_STUCK:           { icon: '⚙️', color: 'gold' },
-  STEERING_LOCKED:      { icon: '🔧', color: 'red'  },
-  WARNING_LIGHT:        { icon: '⚠️', color: 'gold' },
+const PROBLEM_LABEL = {
+  BATTERY_DEAD: 'Battery dead', ENGINE_OVERHEATING: 'Engine overheating',
+  ENGINE_WONT_START: "Engine won't start", ENGINE_NOISE: 'Engine noise',
+  OIL_LEAK: 'Oil leak', FLAT_TYRE: 'Flat tyre', TYRE_BURST: 'Tyre burst',
+  CHAIN_SNAPPED: 'Chain snapped', BRAKE_FAILURE: 'Brake failure',
+  BRAKE_NOISE: 'Brake noise', CLUTCH_FAILURE: 'Clutch failure',
+  SUSPENSION_DAMAGE: 'Suspension damage', HEADLIGHTS_NOT_WORKING: 'Headlights not working',
+  ACCIDENT_DAMAGE: 'Accident damage', VEHICLE_STUCK: 'Vehicle stuck',
+  STRANGE_NOISE: 'Strange noise', DONT_KNOW: "Don't know — just come",
+  GEAR_STUCK: 'Gear stuck', STEERING_LOCKED: 'Steering locked',
+  WARNING_LIGHT: 'Warning light',
+};
+
+const VEHICLE_EMOJI = {
+  TWO_WHEELER: '🛵', THREE_WHEELER: '🛺',
+  FOUR_WHEELER: '🚗', SIX_PLUS_WHEELER: '🚛',
 };
 
 const STATUS_BADGE = {
@@ -30,44 +23,83 @@ const STATUS_BADGE = {
   ACCEPTED:    'gold',
   IN_PROGRESS: 'gold',
   COMPLETED:   'green',
-  CANCELLED:   'dim',
+  CANCELLED:   'red',
+};
+
+const STATUS_LABEL = {
+  PENDING:     'Searching',
+  ACCEPTED:    'En route',
+  IN_PROGRESS: 'In progress',
+  COMPLETED:   'Done',
+  CANCELLED:   'Cancelled',
 };
 
 function formatDate(dateStr) {
   if (!dateStr) return '';
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) +
-    ' · ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  return new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
 export default function JobCard({ job, onClick }) {
-  const { icon, color } = PROBLEM_EMOJI[job.problemType] ?? { icon: '🔧', color: 'muted' };
+  const done       = job.status === 'COMPLETED';
+  const cancelled  = job.status === 'CANCELLED';
   const badgeVariant = STATUS_BADGE[job.status] ?? 'dim';
-  const statusLabel = job.status?.replace('_', ' ') ?? '';
+
+  // Icon box color
+  const iconBg     = done      ? 'rgba(255,183,0,0.10)'  : cancelled ? 'rgba(230,57,70,0.10)'  : 'rgba(255,183,0,0.10)';
+  const iconBorder = done      ? 'rgba(255,183,0,0.30)'  : cancelled ? 'rgba(230,57,70,0.30)'  : 'rgba(255,183,0,0.25)';
+  const cardBorder = done      ? 'rgba(255,183,0,0.20)'  : cancelled ? 'rgba(230,57,70,0.25)'  : 'rgba(255,183,0,0.20)';
 
   return (
     <div
-      className="ps-card"
-      style={{ display: 'flex', gap: 12, alignItems: 'center', cursor: onClick ? 'pointer' : 'default' }}
       onClick={onClick}
+      style={{
+        background: 'var(--surface2)',
+        border: `1.5px solid ${cardBorder}`,
+        borderRadius: 16,
+        padding: '14px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        cursor: onClick ? 'pointer' : 'default',
+      }}
     >
-      {/* Icon box */}
-      <div className={`ps-job-icon ps-job-icon-${color}`}>
-        {icon}
+      {/* Icon box — big, left anchor */}
+      <div style={{
+        width: 52, height: 52,
+        borderRadius: 14, flexShrink: 0,
+        display: 'flex', alignItems: 'center',
+        justifyContent: 'center', fontSize: 26,
+        background: iconBg,
+        border: `1.5px solid ${iconBorder}`,
+        boxShadow: `0 0 12px ${iconBg}`,
+      }}>
+        {VEHICLE_EMOJI[job.vehicleType] || '🚗'}
       </div>
 
-      {/* Text */}
+      {/* Info — all left aligned */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-          <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {job.vehicleName}
-          </p>
-          <Badge variant={badgeVariant}>{statusLabel}</Badge>
-        </div>
-        <p style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 3 }}>
-          {icon} {job.problemType?.replace(/_/g, ' ')} · {formatDate(job.createdAt)}
+        {/* Problem — primary, always bright */}
+        <p style={{
+          margin: 0, fontSize: 14, fontWeight: 700,
+          color: 'var(--text)', letterSpacing: '-0.2px',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          {PROBLEM_LABEL[job.problemType] || job.problemType}
+        </p>
+        {/* Vehicle name — secondary */}
+        <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--text-2)', fontWeight: 500 }}>
+          {job.vehicleName}
+        </p>
+        {/* Date — muted */}
+        <p style={{ margin: '2px 0 0', fontSize: 10, color: 'var(--text-3)' }}>
+          {formatDate(job.createdAt)}
         </p>
       </div>
+
+      {/* Badge — right */}
+      <Badge variant={badgeVariant}>
+        {STATUS_LABEL[job.status] || job.status}
+      </Badge>
     </div>
   );
 }

@@ -7,16 +7,18 @@ export default function TopBar({ centerContent, rightContent, showBack, onBack }
     <div style={{ flexShrink: 0 }}>
       {/* Main bar row */}
       <div className="ps-topbar">
+      <div style={{ flex: 1 }}>
         <PitStopLogo variant="topbar" />
-
-        {centerContent && (
-          <div className="ps-topbar-center">{centerContent}</div>
-        )}
-
-        <div className="ps-topbar-right">
-          {rightContent || <div style={{ width: 28 }} />}
-        </div>
       </div>
+
+      {centerContent && (
+        <div className="ps-topbar-center">{centerContent}</div>
+      )}
+
+      <div className="ps-topbar-right" style={{ flex: 1, justifyContent: 'flex-end' }}>
+        {rightContent || <div style={{ width: 34 }} />}
+      </div>
+</div>
 
       {/* Back button — renders below main bar when showBack is true */}
       {showBack && (

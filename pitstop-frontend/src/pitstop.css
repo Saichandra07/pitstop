@@ -229,10 +229,10 @@ body {
   text-decoration: none;
 }
 .ps-logo-topbar-icon {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   background: var(--red-soft);
-  border: 1px solid var(--red-border);
+  border: 1.5px solid var(--red-border);
   border-radius: var(--r-xs);
   display: flex;
   align-items: center;
@@ -240,10 +240,10 @@ body {
   flex-shrink: 0;
 }
 .ps-logo-topbar-name {
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 19px;
+  font-weight: 800;
   color: var(--text);
-  letter-spacing: -0.3px;
+  letter-spacing: -0.4px;
 }
 
 /* ── TOP BAR ────────────────────────────────────────────────── */
@@ -606,12 +606,16 @@ body {
   font-weight: 700;
   flex-shrink: 0;
 }
-.ps-avatar-sm  { width: 32px; height: 32px; font-size: 12px; }
-.ps-avatar-md  { width: 40px; height: 40px; font-size: 14px; }
+.ps-avatar-sm  { width: 36px; height: 36px; font-size: 13px; font-weight: 700; }.ps-avatar-md  { width: 40px; height: 40px; font-size: 14px; }
 .ps-avatar-lg  { width: 52px; height: 52px; font-size: 18px; }
-.ps-avatar-red   { background: rgba(230,57,70,0.12);  color: var(--red);   border: 2px solid var(--gold); }
-.ps-avatar-gold  { background: rgba(255,183,0,0.10);  color: var(--gold);  border: 2px solid var(--gold); }
-.ps-avatar-muted { background: var(--surface3);       color: var(--text-2);border: 1px solid var(--border); }
+.ps-avatar-red   { 
+  background: var(--red-soft); 
+  color: var(--red); 
+  border: 1.5px solid var(--red-border);
+  border-radius: 10px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}.ps-avatar-muted { background: var(--surface3);       color: var(--text-2);border: 1px solid var(--border); }
 
 /* ── SOS PULSE RING ─────────────────────────────────────────── */
 .ps-pulse-wrap {

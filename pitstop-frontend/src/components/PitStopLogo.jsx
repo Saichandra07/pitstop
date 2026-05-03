@@ -16,9 +16,9 @@ export default function PitStopLogo({ variant = 'topbar' }) {
   if (variant === 'auth') {
     return (
       <div className="ps-logo-auth">
-        <div className="ps-logo-auth-icon">
-          <LightningBolt size={24} />
-        </div>
+        <div className="ps-logo-topbar-icon">
+        <LightningBolt size={18} />
+      </div>
         <span className="ps-logo-auth-name">PitStop</span>
         <span className="ps-logo-auth-tag">Roadside help, instantly.</span>
       </div>
