@@ -3,100 +3,77 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import axios from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 
+const NAV_H = 56;
+
 const VEHICLE_EMOJI = {
-  TWO_WHEELER: '🛵',
-  THREE_WHEELER: '🛺',
-  FOUR_WHEELER: '🚗',
-  SIX_PLUS_WHEELER: '🚛',
+  TWO_WHEELER: '🛵', THREE_WHEELER: '🛺',
+  FOUR_WHEELER: '🚗', SIX_PLUS_WHEELER: '🚛',
 };
-
-const VEHICLE_LABEL = {
-  TWO_WHEELER: '2-Wheeler',
-  THREE_WHEELER: '3-Wheeler',
-  FOUR_WHEELER: '4-Wheeler',
-  SIX_PLUS_WHEELER: '6+ Wheeler',
-};
-
 const PROBLEM_LABEL = {
-  BATTERY_DEAD: 'Battery dead',
-  ENGINE_OVERHEATING: 'Engine overheating',
-  ENGINE_WONT_START: "Engine won't start",
-  ENGINE_NOISE: 'Engine noise',
-  OIL_LEAK: 'Oil leak',
-  FLAT_TYRE: 'Flat tyre',
-  TYRE_BURST: 'Tyre burst',
-  CHAIN_SNAPPED: 'Chain snapped',
-  BRAKE_FAILURE: 'Brake failure',
-  BRAKE_NOISE: 'Brake noise',
-  CLUTCH_FAILURE: 'Clutch failure',
-  SUSPENSION_DAMAGE: 'Suspension damage',
-  HEADLIGHTS_NOT_WORKING: 'Headlights not working',
-  ACCIDENT_DAMAGE: 'Accident damage',
-  VEHICLE_STUCK: 'Vehicle stuck',
-  STRANGE_NOISE: 'Strange noise',
-  DONT_KNOW: "Don't know — just come",
-  GEAR_STUCK: 'Gear stuck',
-  STEERING_LOCKED: 'Steering locked',
+  BATTERY_DEAD: 'Battery dead', ENGINE_OVERHEATING: 'Engine overheating',
+  ENGINE_WONT_START: "Engine won't start", ENGINE_NOISE: 'Engine noise',
+  OIL_LEAK: 'Oil leak', FLAT_TYRE: 'Flat tyre', TYRE_BURST: 'Tyre burst',
+  CHAIN_SNAPPED: 'Chain snapped', BRAKE_FAILURE: 'Brake failure',
+  BRAKE_NOISE: 'Brake noise', CLUTCH_FAILURE: 'Clutch failure',
+  SUSPENSION_DAMAGE: 'Suspension damage', HEADLIGHTS_NOT_WORKING: 'Headlights not working',
+  ACCIDENT_DAMAGE: 'Accident damage', VEHICLE_STUCK: 'Vehicle stuck',
+  STRANGE_NOISE: 'Strange noise', DONT_KNOW: "Don't know — just come",
+  GEAR_STUCK: 'Gear stuck', STEERING_LOCKED: 'Steering locked',
   WARNING_LIGHT: 'Warning light',
 };
 
-const STATUS_COLOR = {
-  COMPLETED: '#61cd96',
-  CANCELLED: '#E63946',
-  IN_PROGRESS: '#FAC775',
-  ACCEPTED: '#FAC775',
-  PENDING: '#888',
-};
-
-const MOCK_JOBS = [
-  {
-    id: 'mock-1',
-    vehicleType: 'TWO_WHEELER',
-    problemType: 'FLAT_TYRE',
-    vehicleName: 'Honda Activa',
-    status: 'IN_PROGRESS',
-    address: 'Kondapur, Hyderabad',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'mock-2',
-    vehicleType: 'FOUR_WHEELER',
-    problemType: 'BATTERY_DEAD',
-    vehicleName: 'Swift Dzire',
-    status: 'COMPLETED',
-    address: 'Banjara Hills, Hyderabad',
-    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-  },
-  {
-    id: 'mock-3',
-    vehicleType: 'TWO_WHEELER',
-    problemType: 'ENGINE_WONT_START',
-    vehicleName: 'Royal Enfield',
-    status: 'CANCELLED',
-    address: 'Madhapur, Hyderabad',
-    createdAt: new Date(Date.now() - 86400000 * 10).toISOString(),
-  },
-];
+// Icon box color by status
+function jobIconStyle(status) {
+  if (status === 'COMPLETED') return { background: 'rgba(255,183,0,0.08)', border: '1px solid rgba(255,183,0,0.20)' };
+  if (status === 'CANCELLED') return { background: 'rgba(144,144,168,0.08)', border: '1px solid var(--border)' };
+  return { background: 'rgba(230,57,70,0.10)', border: '1px solid rgba(230,57,70,0.25)' }; // active
+}
 
 function groupByMonth(jobs) {
   const groups = {};
   jobs.forEach(job => {
-    const d = new Date(job.createdAt);
-    const key = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+    const key = new Date(job.createdAt).toLocaleString('default', { month: 'long', year: 'numeric' });
     if (!groups[key]) groups[key] = [];
     groups[key].push(job);
   });
   return groups;
 }
 
+function formatDate(d) {
+  if (!d) return '';
+  return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+}
+
+// ─── Icons ────────────────────────────────────────────────────────────────────
+
+const SosNavIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+    <polygon points="12,3 22,21 2,21" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" fill="none"/>
+    <path d="M12 10v5M12 17.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+const TripsIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5"/>
+    <polyline points="12 6 12 12 16 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const ProfileIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.5"/>
+    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+
 export default function HistoryPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate  = useNavigate();
+  const location  = useLocation();
   const { user, logout } = useAuth();
-  const [jobs, setJobs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showLogoutSheet, setShowLogoutSheet] = useState(false);
-  const handleLogout = () => { logout(); navigate('/login'); };
+  const [jobs, setJobs]           = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [showLogout, setShowLogout] = useState(false);
 
   useEffect(() => {
     axios.get('/jobs/my/history')
@@ -105,322 +82,188 @@ export default function HistoryPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const activeJob = jobs.find(j => ['PENDING', 'ACCEPTED', 'IN_PROGRESS'].includes(j.status));
-  const historyJobs = jobs.filter(j => ['COMPLETED', 'CANCELLED'].includes(j.status));
-  const grouped = groupByMonth(historyJobs);
+  const handleLogout = () => { logout(); navigate('/login'); };
+
+  const activeJobs  = jobs.filter(j => ['PENDING','ACCEPTED','IN_PROGRESS'].includes(j.status));
+  const doneJobs    = jobs.filter(j => ['COMPLETED','CANCELLED'].includes(j.status));
+  const grouped     = groupByMonth(doneJobs);
+  const initials    = user?.name?.charAt(0)?.toUpperCase() || 'U';
+
+  // Month total for most recent month
+  const firstMonthJobs = Object.values(grouped)[0] || [];
+  const monthCompleted = firstMonthJobs.filter(j => j.status === 'COMPLETED').length;
+  const firstMonthKey  = Object.keys(grouped)[0] || '';
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: '#141414',
-      color: '#fff',
-      fontFamily: "'Inter', sans-serif",
-      paddingBottom: 96,
-    }}>
-      {/* Topbar */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        padding: '16px 20px 12px',
-        borderBottom: '1px solid #222',
-      }}>
-        {/* Left — fixed width */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: 8,
-            backgroundColor: '#E63946',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <span style={{ fontSize: 14 }}>⚡</span>
+    <div style={{ minHeight: '100dvh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'var(--font)', paddingBottom: NAV_H + 16 }}>
+
+      {/* ── TopBar ── */}
+      <div style={{ display: 'flex', alignItems: 'center', padding: '20px 16px 14px', borderBottom: '1px solid var(--border)' }}>
+        {/* Logo */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 7 }}>
+          <div style={{ width: 28, height: 28, background: 'rgba(230,57,70,0.15)', border: '1px solid var(--red-border)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <polygon points="13,2 3,14 12,14 11,22 21,10 12,10" stroke="var(--red)" strokeWidth="1.8" strokeLinejoin="round" fill="none"/>
+            </svg>
           </div>
-          <span style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>PitStop</span>
+          <span style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)', letterSpacing: 0.2 }}>PitStop</span>
         </div>
-
-        {/* Center — equal flex so it's always truly centered */}
+        {/* Center */}
         <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-          <span style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>Trips</span>
+          <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>Trips</span>
         </div>
-
-        {/* Right — fixed width, right-aligned */}
+        {/* Avatar */}
         <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
-          <div
-            onClick={() => setShowLogoutSheet(true)}
-            style={{
-              width: 32, height: 32, borderRadius: '50%',
-              backgroundColor: '#E63946',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 13, fontWeight: 700, color: '#fff',
-              cursor: 'pointer', flexShrink: 0,
-            }}
-          >
-            {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+          <div onClick={() => setShowLogout(true)} style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: 'var(--text)', cursor: 'pointer' }}>
+            {initials}
           </div>
         </div>
       </div>
 
       {loading ? (
-        <div style={{ padding: 40, textAlign: 'center', color: '#555' }}>Loading...</div>
+        <div style={{ padding: 48, display: 'flex', justifyContent: 'center' }}><div className="ps-spinner" /></div>
       ) : jobs.length === 0 ? (
-        /* Empty state */
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '60vh',
-          gap: 12,
-          color: '#555',
-        }}>
-          <span style={{ fontSize: 48 }}>🔧</span>
-          <p style={{ fontSize: 16, fontWeight: 600, color: '#777', margin: 0 }}>No trips yet</p>
-          <p style={{ fontSize: 13, color: '#444', margin: 0 }}>Your SOS history will show up here.</p>
-          <button
-            onClick={() => navigate('/dashboard')}
-            style={{
-              marginTop: 12,
-              padding: '12px 28px',
-              backgroundColor: '#E63946',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 24,
-              fontSize: 15,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Go home
+        /* ── Empty state ── */
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '65vh', gap: 10 }}>
+          <span style={{ fontSize: 44 }}>🔧</span>
+          <p style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0 }}>No trips yet</p>
+          <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>Your SOS history will appear here.</p>
+          <button onClick={() => navigate('/dashboard')} className="ps-btn" style={{ marginTop: 16, width: 'auto', padding: '12px 28px', borderRadius: 9999 }}>
+            Request help
           </button>
         </div>
       ) : (
         <div style={{ padding: '16px 16px 0' }}>
 
-          {/* Active Job Card */}
-          {activeJob && (
-            <div style={{ marginBottom: 24 }}>
-              <p style={{
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: 1.2,
-                color: '#FAC775',
-                textTransform: 'uppercase',
-                marginBottom: 10,
-                textAlign: 'left', // FIX 2
-              }}>
-                In progress
-              </p>
-              <div style={{
-                backgroundColor: '#1a1a1a',
-                borderRadius: 16,
-                padding: '16px',
-                border: '1px solid #2a2a2a',
-              }}>
-                {/* Origin row */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 4 }}>
-                    <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#E63946' }} />
-                    <div style={{ width: 2, backgroundColor: '#333', minHeight: 32, flex: 1, margin: '4px 0' }} />{/* FIX 3 */}
-                    <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#61cd96' }} />
-                  </div>
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 56 }}>
-                    <div>
-                      <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#fff' }}>
-                        {activeJob.vehicleName}
-                      </p>
-                      <p style={{ margin: '2px 0 0', fontSize: 12, color: '#555' }}>
-                        {activeJob.address || 'Your location'}
-                      </p>
-                    </div>
-                    <div>
-                      <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: STATUS_COLOR[activeJob.status] }}>
-                        {activeJob.status.replace('_', ' ')}
-                      </p>
-                      <p style={{ margin: '2px 0 0', fontSize: 12, color: '#555' }}>
-                        {PROBLEM_LABEL[activeJob.problemType] || activeJob.problemType}
-                      </p>
-                    </div>
-                  </div>
-                  <span style={{ fontSize: 28 }}>{VEHICLE_EMOJI[activeJob.vehicleType]}</span>
-                </div>
+          {/* ── Active jobs ── */}
+          {activeJobs.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>Active</span>
+                <span className="ps-tag ps-tag-live">Live</span>
               </div>
-            </div>
-          )}
-
-          {/* History Section */}
-          {Object.keys(grouped).length > 0 && (
-            <div>
-              <p style={{
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: 1.2,
-                color: '#888',
-                textTransform: 'uppercase',
-                marginBottom: 10,
-                textAlign: 'left', // FIX 4
-              }}>
-                History
-              </p>
-              {Object.entries(grouped).map(([month, monthJobs]) => (
-                <div key={month} style={{ marginBottom: 16 }}>
-                  {/* Month label */}
-                  <p style={{
-                    fontSize: 12,
-                    color: '#666', // FIX 5
-                    marginBottom: 6,
-                    textAlign: 'left',
-                  }}>{month}</p>
-
-                  <div style={{
-                    backgroundColor: '#1a1a1a',
-                    borderRadius: 14,
-                    border: '1px solid #222',
-                    overflow: 'hidden',
-                  }}>
-                    {monthJobs.map((job, idx) => (
-                      <div
-                        key={job.id}
-                        onClick={() => navigate(`/jobs/${job.id}`)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 12,
-                          padding: '14px 16px',
-                          borderBottom: idx < monthJobs.length - 1 ? '1px solid #222' : 'none',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {/* Vehicle emoji circle */}
-                        <div style={{
-                          width: 42,
-                          height: 42,
-                          borderRadius: '50%',
-                          backgroundColor: '#242424',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 20,
-                          flexShrink: 0,
-                        }}>
-                          {VEHICLE_EMOJI[job.vehicleType]}
-                        </div>
-
-                        {/* Job info */}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{
-                            margin: 0,
-                            fontSize: 14,
-                            fontWeight: 600,
-                            color: '#fff',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}>
-                            {PROBLEM_LABEL[job.problemType] || job.problemType}
-                          </p>
-                          <p style={{
-                            margin: '2px 0 0',
-                            fontSize: 12,
-                            color: '#555', // FIX 6
-                          }}>
-                            {job.vehicleName}
-                          </p>
-                        </div>
-
-                        {/* Status + chevron */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                          <span style={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            color: STATUS_COLOR[job.status] || '#888',
-                          }}>
-                            {job.status === 'COMPLETED' ? 'Done' : 'Cancelled'}
-                          </span>
-                          <span style={{ color: '#444', fontSize: 16 }}>›</span>
-                        </div>
-                      </div>
-                    ))}
+              {activeJobs.map(job => (
+                <div key={job.id} onClick={() => navigate('/dashboard')} style={{ background: 'var(--surface2)', border: '1px solid var(--red-border)', borderRadius: 16, padding: 14, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(230,57,70,0.10)', border: '1px solid rgba(230,57,70,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
+                    {VEHICLE_EMOJI[job.vehicleType]}
                   </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{PROBLEM_LABEL[job.problemType] || job.problemType}</p>
+                    <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-3)' }}>{job.vehicleName} · {formatDate(job.createdAt)}</p>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--gold)', flexShrink: 0 }}>
+                    {job.status === 'IN_PROGRESS' ? 'In progress' : job.status === 'ACCEPTED' ? 'En route' : 'Searching...'}
+                  </span>
                 </div>
               ))}
             </div>
           )}
+
+          {/* ── My Jobs heading ── */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>My Jobs</span>
+            {firstMonthKey && (
+              <span className="ps-tag ps-tag-dim">{firstMonthKey}</span>
+            )}
+          </div>
+
+          {/* ── Job cards ── */}
+          {doneJobs.length === 0 ? (
+            <p style={{ fontSize: 13, color: 'var(--text-3)', textAlign: 'center', paddingTop: 24 }}>No completed trips yet.</p>
+          ) : (
+            Object.entries(grouped).map(([month, monthJobs]) => (
+              <div key={month} style={{ marginBottom: 20 }}>
+                {Object.keys(grouped).length > 1 && (
+                  <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 8, fontWeight: 500 }}>{month}</p>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {monthJobs.map(job => {
+  const done = job.status === 'COMPLETED';
+  return (
+    <div
+      key={job.id}
+      style={{
+        background: 'var(--surface2)',
+        border: `1px solid ${done ? 'var(--border)' : 'rgba(144,144,168,0.1)'}`,
+        borderRadius: 16, padding: '13px 14px',
+        display: 'flex', alignItems: 'center', gap: 12,
+        opacity: done ? 1 : 0.55,
+      }}
+    >
+      {/* Icon box */}
+      <div style={{
+        width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+        background: done ? 'rgba(255,183,0,0.08)' : 'rgba(144,144,168,0.06)',
+        border: `1px solid ${done ? 'rgba(255,183,0,0.20)' : 'rgba(144,144,168,0.12)'}`,
+      }}>
+        {VEHICLE_EMOJI[job.vehicleType]}
+      </div>
+
+      {/* Info */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: done ? 'var(--text)' : 'var(--text-2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {PROBLEM_LABEL[job.problemType] || job.problemType}
+        </p>
+        <p style={{ margin: '3px 0 0', fontSize: 11, color: 'var(--text-3)' }}>
+          {job.vehicleName} · {formatDate(job.createdAt)}
+        </p>
+      </div>
+
+      {/* Status badge */}
+      <span className={`ps-tag ${done ? 'ps-tag-green' : 'ps-tag-dim'}`}>
+        {done ? 'Done' : 'Cancelled'}
+      </span>
+    </div>
+  );
+})}
+                </div>
+
+                {/* Month total card — only for completed jobs */}
+                {monthCompleted > 0 && month === firstMonthKey && (
+                  <div style={{ background: 'var(--surface2)', border: '1px solid var(--gold-border)', borderRadius: 16, padding: 14, marginTop: 10, position: 'relative', overflow: 'hidden' }}>
+                    {/* Gold top stripe */}
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, var(--gold), var(--red))' }} />
+                    <p style={{ fontSize: 10, color: 'var(--text-3)', letterSpacing: '1px', textTransform: 'uppercase', fontWeight: 600, margin: '0 0 4px' }}>Month total</p>
+                    <p style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)', letterSpacing: '-0.5px', margin: 0 }}>{monthCompleted} jobs completed</p>
+                    <p style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 4 }}>in {month}</p>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
         </div>
       )}
 
-      {/* Bottom Nav */}
-      <div style={{
-        position: 'fixed',
-        bottom: 0, left: 0, right: 0,
-        height: 64,
-        backgroundColor: '#141414',
-        borderTop: '1px solid #222',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        zIndex: 100,
-      }}>
+      {/* ── Bottom Nav ── */}
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, height: NAV_H, display: 'flex', justifyContent: 'space-around', alignItems: 'center', background: 'var(--surface)', borderTop: '1px solid var(--border)', zIndex: 100, paddingBottom: 'env(safe-area-inset-bottom,0px)' }}>
         {[
-          {
-            label: 'SOS',
-            path: '/dashboard',
-            icon: (active) => (
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#E63946' : '#555'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                <line x1="12" y1="9" x2="12" y2="13"/>
-                <line x1="12" y1="17" x2="12.01" y2="17"/>
-              </svg>
-            ),
-          },
-          {
-            label: 'Trips',
-            path: '/history',
-            icon: (active) => (
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#E63946' : '#555'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <polyline points="12 6 12 12 16 14"/>
-              </svg>
-            ),
-          },
-          {
-            label: 'Profile',
-            path: '/profile',
-            icon: (active) => (
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#E63946' : '#555'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                <circle cx="12" cy="7" r="4"/>
-              </svg>
-            ),
-          },
-        ].map(item => {
-          const active = location.pathname === item.path;
+          { label: 'SOS',     icon: <SosNavIcon />,  path: '/dashboard' },
+          { label: 'Trips',   icon: <TripsIcon />,   path: '/history'   },
+          { label: 'Profile', icon: <ProfileIcon />, path: '/profile'   },
+        ].map(({ label, icon, path }) => {
+          const active = location.pathname === path;
           return (
-            <button
-              key={item.label}
-              onClick={() => navigate(item.path)}
-              style={{
-                background: 'none', border: 'none',
-                color: active ? '#E63946' : '#555',
-                display: 'flex', flexDirection: 'column',
-                alignItems: 'center', gap: 3,
-                cursor: 'pointer', padding: '4px 20px',
-              }}
-            >
-              {item.icon(active)}
-              <span style={{ fontSize: 11, color: active ? '#E63946' : '#555' }}>{item.label}</span>
-            </button>
+            <div key={label} onClick={() => navigate(path)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, color: active ? 'var(--red)' : 'var(--text-3)', cursor: 'pointer', padding: '4px 16px' }}>
+              {icon}
+              <span style={{ fontSize: 10, fontWeight: 500 }}>{label}</span>
+            </div>
           );
         })}
       </div>
-      {showLogoutSheet && (
-      <div style={{ position: 'fixed', inset: 0, zIndex: 200 }}>
-        <div onClick={() => setShowLogoutSheet(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} />
-        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: '#1a1a1a', borderRadius: '20px 20px 0 0', padding: '24px 20px 36px', zIndex: 201 }}>
-          <p style={{ color: '#fff', fontWeight: 600, fontSize: 16, marginBottom: 6 }}>Log out?</p>
-          <p style={{ color: '#555', fontSize: 13, marginBottom: 24 }}>You'll need to sign in again to use PitStop.</p>
-          <button onClick={handleLogout} style={{ width: '100%', height: 48, borderRadius: 12, background: '#E63946', border: 'none', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginBottom: 10 }}>Log out</button>
-          <button onClick={() => setShowLogoutSheet(false)} style={{ width: '100%', height: 48, borderRadius: 12, background: 'transparent', border: '0.5px solid #2a2a2a', color: '#555', fontSize: 14, cursor: 'pointer' }}>Cancel</button>
+
+      {/* ── Logout sheet ── */}
+      {showLogout && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200 }}>
+          <div onClick={() => setShowLogout(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} />
+          <div className="ps-slide-up" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: '24px 20px 36px', zIndex: 201 }}>
+            <p style={{ color: 'var(--text)', fontWeight: 600, fontSize: 16, marginBottom: 6 }}>Log out?</p>
+            <p style={{ color: 'var(--text-3)', fontSize: 13, marginBottom: 24 }}>You'll need to sign in again to use PitStop.</p>
+            <button onClick={handleLogout} className="ps-btn" style={{ marginBottom: 10 }}>Log out</button>
+            <button onClick={() => setShowLogout(false)} className="ps-btn-ghost">Cancel</button>
+          </div>
         </div>
-      </div>
-)}
+      )}
     </div>
   );
 }

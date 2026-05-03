@@ -363,11 +363,11 @@ export default function DashboardPage() {
       }}>
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <div style={{ width: 28, height: 28, background: "var(--red)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <svg width="13" height="13" viewBox="0 0 12 12" fill="none">
-              <polygon points="6,1 11,10 1,10" fill="white" />
-            </svg>
-          </div>
+          <div style={{ width: 28, height: 28, background: "rgba(230,57,70,0.15)", border: "1.5px solid var(--red)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+    <polygon points="13,2 3,14 12,14 11,22 21,10 12,10" stroke="var(--red)" strokeWidth="1.8" strokeLinejoin="round" fill="none"/>
+  </svg>
+</div>
           <span style={{ fontSize: 17, fontWeight: 700, color: "var(--text)", letterSpacing: 0.2 }}>PitStop</span>
         </div>
 
