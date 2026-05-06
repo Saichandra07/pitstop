@@ -1,222 +1,270 @@
-import { useState, useEffect } from "react";import { useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import api from "../api/axios";
+import TopBar from "../components/TopBar";
+import ProgressBar from "../components/ProgressBar";
+
+const WHEELER_META = {
+  TWO_WHEELER:      { label: "2-Wheeler",   icon: "🛵" },
+  THREE_WHEELER:    { label: "3-Wheeler",   icon: "🛺" },
+  FOUR_WHEELER:     { label: "4-Wheeler",   icon: "🚗" },
+  SIX_PLUS_WHEELER: { label: "6-Wheeler+",  icon: "🚛" },
+};
 
 const PROBLEMS_BY_WHEELER = {
-    TWO_WHEELER: [
-        "BATTERY_DEAD", "ENGINE_OVERHEATING", "ENGINE_WONT_START", "ENGINE_NOISE",
-        "OIL_LEAK", "FLAT_TYRE", "TYRE_BURST", "CHAIN_SNAPPED", "BRAKE_FAILURE",
-        "BRAKE_NOISE", "CLUTCH_FAILURE", "SUSPENSION_DAMAGE", "HEADLIGHTS_NOT_WORKING",
-        "ACCIDENT_DAMAGE", "VEHICLE_STUCK", "STRANGE_NOISE", "DONT_KNOW"
-    ],
-    THREE_WHEELER: [
-        "BATTERY_DEAD", "ENGINE_OVERHEATING", "ENGINE_WONT_START", "ENGINE_NOISE",
-        "OIL_LEAK", "FLAT_TYRE", "TYRE_BURST", "BRAKE_FAILURE", "BRAKE_NOISE",
-        "CLUTCH_FAILURE", "SUSPENSION_DAMAGE", "HEADLIGHTS_NOT_WORKING",
-        "ACCIDENT_DAMAGE", "VEHICLE_STUCK", "STRANGE_NOISE", "DONT_KNOW",
-        "GEAR_STUCK", "STEERING_LOCKED"
-    ],
-    FOUR_WHEELER: [
-        "BATTERY_DEAD", "ENGINE_OVERHEATING", "ENGINE_WONT_START", "ENGINE_NOISE",
-        "OIL_LEAK", "FLAT_TYRE", "TYRE_BURST", "BRAKE_FAILURE", "BRAKE_NOISE",
-        "CLUTCH_FAILURE", "SUSPENSION_DAMAGE", "HEADLIGHTS_NOT_WORKING",
-        "ACCIDENT_DAMAGE", "VEHICLE_STUCK", "STRANGE_NOISE", "DONT_KNOW",
-        "GEAR_STUCK", "STEERING_LOCKED", "WARNING_LIGHT"
-    ],
-    SIX_PLUS_WHEELER: [
-        "BATTERY_DEAD", "ENGINE_OVERHEATING", "ENGINE_WONT_START", "ENGINE_NOISE",
-        "OIL_LEAK", "FLAT_TYRE", "TYRE_BURST", "BRAKE_FAILURE", "BRAKE_NOISE",
-        "CLUTCH_FAILURE", "SUSPENSION_DAMAGE", "HEADLIGHTS_NOT_WORKING",
-        "ACCIDENT_DAMAGE", "VEHICLE_STUCK", "STRANGE_NOISE", "DONT_KNOW",
-        "GEAR_STUCK", "STEERING_LOCKED", "WARNING_LIGHT"
-    ]
+  TWO_WHEELER: [
+    "BATTERY_DEAD", "ENGINE_OVERHEATING", "ENGINE_WONT_START", "ENGINE_NOISE",
+    "OIL_LEAK", "FLAT_TYRE", "TYRE_BURST", "CHAIN_SNAPPED", "BRAKE_FAILURE",
+    "BRAKE_NOISE", "CLUTCH_FAILURE", "SUSPENSION_DAMAGE", "HEADLIGHTS_NOT_WORKING",
+    "ACCIDENT_DAMAGE", "VEHICLE_STUCK", "STRANGE_NOISE", "DONT_KNOW",
+  ],
+  THREE_WHEELER: [
+    "BATTERY_DEAD", "ENGINE_OVERHEATING", "ENGINE_WONT_START", "ENGINE_NOISE",
+    "OIL_LEAK", "FLAT_TYRE", "TYRE_BURST", "BRAKE_FAILURE", "BRAKE_NOISE",
+    "CLUTCH_FAILURE", "SUSPENSION_DAMAGE", "HEADLIGHTS_NOT_WORKING",
+    "ACCIDENT_DAMAGE", "VEHICLE_STUCK", "STRANGE_NOISE", "DONT_KNOW",
+    "GEAR_STUCK", "STEERING_LOCKED",
+  ],
+  FOUR_WHEELER: [
+    "BATTERY_DEAD", "ENGINE_OVERHEATING", "ENGINE_WONT_START", "ENGINE_NOISE",
+    "OIL_LEAK", "FLAT_TYRE", "TYRE_BURST", "BRAKE_FAILURE", "BRAKE_NOISE",
+    "CLUTCH_FAILURE", "SUSPENSION_DAMAGE", "HEADLIGHTS_NOT_WORKING",
+    "ACCIDENT_DAMAGE", "VEHICLE_STUCK", "STRANGE_NOISE", "DONT_KNOW",
+    "GEAR_STUCK", "STEERING_LOCKED", "WARNING_LIGHT",
+  ],
+  SIX_PLUS_WHEELER: [
+    "BATTERY_DEAD", "ENGINE_OVERHEATING", "ENGINE_WONT_START", "ENGINE_NOISE",
+    "OIL_LEAK", "FLAT_TYRE", "TYRE_BURST", "BRAKE_FAILURE", "BRAKE_NOISE",
+    "CLUTCH_FAILURE", "SUSPENSION_DAMAGE", "HEADLIGHTS_NOT_WORKING",
+    "ACCIDENT_DAMAGE", "VEHICLE_STUCK", "STRANGE_NOISE", "DONT_KNOW",
+    "GEAR_STUCK", "STEERING_LOCKED", "WARNING_LIGHT",
+  ],
 };
 
-const WHEELER_LABELS = {
-    TWO_WHEELER:      { label: "2-Wheeler",  icon: "🏍️" },
-    THREE_WHEELER:    { label: "3-Wheeler",  icon: "🛺" },
-    FOUR_WHEELER:     { label: "4-Wheeler",  icon: "🚗" },
-    SIX_PLUS_WHEELER: { label: "6-Wheeler+", icon: "🚛" }
+const PROBLEM_LABELS = {
+  BATTERY_DEAD:           "Battery dead",
+  ENGINE_OVERHEATING:     "Engine overheating",
+  ENGINE_WONT_START:      "Won't start",
+  ENGINE_NOISE:           "Engine noise",
+  OIL_LEAK:               "Oil leak",
+  FLAT_TYRE:              "Flat tyre",
+  TYRE_BURST:             "Tyre burst",
+  CHAIN_SNAPPED:          "Chain snapped",
+  BRAKE_FAILURE:          "Brake failure",
+  BRAKE_NOISE:            "Brake noise",
+  CLUTCH_FAILURE:         "Clutch failure",
+  SUSPENSION_DAMAGE:      "Suspension",
+  HEADLIGHTS_NOT_WORKING: "Headlights",
+  ACCIDENT_DAMAGE:        "Accident damage",
+  VEHICLE_STUCK:          "Vehicle stuck",
+  STRANGE_NOISE:          "Strange noise",
+  GEAR_STUCK:             "Gear stuck",
+  STEERING_LOCKED:        "Steering locked",
+  WARNING_LIGHT:          "Warning light",
+  DONT_KNOW:              "Don't know",
 };
-
-const formatLabel = val =>
-    val.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 
 export default function ProblemsOnboardingPage() {
-    const navigate = useNavigate();
-    const location = useLocation();
+  const navigate   = useNavigate();
+  const location   = useLocation();
 
-    // Wheelers passed from Step 2 via navigation state
-    const selectedWheelers = location.state?.selectedWheelers || [];
+  const selectedWheelers = location.state?.selectedWheelers || [];
 
-    
+  const [selectedProblems, setSelectedProblems] = useState({});
+  const [error, setError]   = useState("");
+  const [loading, setLoading] = useState(false);
 
-    const [selectedProblems, setSelectedProblems] = useState({});
-    const [error, setError] = useState("");
-    const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (selectedWheelers.length === 0) navigate("/mechanic/onboarding/vehicles");
+  }, []);
 
-    useEffect(() => {
-        if (selectedWheelers.length === 0) {
-            navigate("/mechanic/onboarding/vehicles");
-        }
-    }, []);
+  if (selectedWheelers.length === 0) return null;
 
+  const toggleProblem = (wheeler, problem) => {
+    setSelectedProblems(prev => {
+      const current = new Set(prev[wheeler] || []);
+      current.has(problem) ? current.delete(problem) : current.add(problem);
+      return { ...prev, [wheeler]: current };
+    });
+  };
 
-    // If someone lands here directly without going through Step 2, send them back
-    if (selectedWheelers.length === 0) {
-        navigate("/mechanic/onboarding/vehicles");
-        return null;
+  const toggleAll = (wheeler) => {
+    const all = PROBLEMS_BY_WHEELER[wheeler];
+    const current = selectedProblems[wheeler] || new Set();
+    const allSelected = all.every(p => current.has(p));
+    setSelectedProblems(prev => ({
+      ...prev,
+      [wheeler]: allSelected ? new Set() : new Set(all),
+    }));
+  };
+
+  const validate = () => {
+    for (const wheeler of selectedWheelers) {
+      const problems = selectedProblems[wheeler];
+      if (!problems || problems.size === 0)
+        return `Select at least one problem for ${WHEELER_META[wheeler].label}.`;
     }
+    return null;
+  };
 
-    const toggleProblem = (wheeler, problem) => {
-        setSelectedProblems(prev => {
-            const current = new Set(prev[wheeler] || []);
-            current.has(problem) ? current.delete(problem) : current.add(problem);
-            return { ...prev, [wheeler]: current };
-        });
-    };
+  const handleSubmit = async () => {
+    setError("");
+    const err = validate();
+    if (err) { setError(err); return; }
 
-    const toggleAll = (wheeler) => {
-        const all = PROBLEMS_BY_WHEELER[wheeler];
-        const current = selectedProblems[wheeler] || new Set();
-        const allSelected = all.every(p => current.has(p));
-        setSelectedProblems(prev => ({
-            ...prev,
-            [wheeler]: allSelected ? new Set() : new Set(all)
-        }));
-    };
+    try {
+      setLoading(true);
+      await api.patch("/accounts/expertise", {
+        expertise: selectedWheelers.map(wheeler => ({
+          wheelerType: wheeler,
+          problemTypes: Array.from(selectedProblems[wheeler]),
+        })),
+      });
+      navigate("/mechanic/dashboard");
+    } catch {
+      setError("Failed to save expertise. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const validate = () => {
-        for (const wheeler of selectedWheelers) {
-            const problems = selectedProblems[wheeler];
-            if (!problems || problems.size === 0) {
-                return `Select at least one problem for ${WHEELER_LABELS[wheeler].label}.`;
-            }
+  return (
+    <div style={{
+      minHeight: "100dvh",
+      background: "var(--bg)",
+      display: "flex",
+      flexDirection: "column",
+      padding: "0 16px 32px",
+      fontFamily: "'Inter', sans-serif",
+    }}>
+      <TopBar
+        centerContent={
+          <span style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 500, letterSpacing: "0.5px" }}>
+            Step 3 of 3
+          </span>
         }
-        return null;
-    };
+        showBack
+        onBack={() => navigate("/mechanic/onboarding/vehicles", { state: { selectedWheelers } })}
+      />
 
-    const handleSubmit = async () => {
-        setError("");
-        const err = validate();
-        if (err) { setError(err); return; }
+      <ProgressBar steps={3} current={3} />
 
-        const expertise = {
-            expertise: selectedWheelers.map(wheeler => ({
-                wheelerType: wheeler,
-                problemTypes: Array.from(selectedProblems[wheeler])
-            }))
-        };
+      <div style={{ marginTop: 8, marginBottom: 24 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.3px", marginBottom: 4 }}>
+          What problems can you fix?
+        </h2>
+        <p style={{ fontSize: 13, color: "var(--text-3)" }}>Select all you're confident handling</p>
+      </div>
 
-        try {
-            setLoading(true);
-            await api.patch("/accounts/expertise", expertise);
-            navigate("/mechanic/dashboard");
-        } catch (err) {
-            setError("Failed to save expertise. Please try again.");
-        } finally {
-            setLoading(false);
-        }
-    };
+      {/* Wheeler sections */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
+        {selectedWheelers.map(wheeler => {
+          const problems = PROBLEMS_BY_WHEELER[wheeler];
+          const sel = selectedProblems[wheeler] || new Set();
+          const allSelected = problems.every(p => sel.has(p));
+          const meta = WHEELER_META[wheeler];
 
-    return (
-    <div style={{ minHeight: "100vh", background: "#141414", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "24px 16px", boxSizing: "border-box" }}>
-        <div style={{ width: "100%", maxWidth: 480, background: "#1a1a1a", borderRadius: 16, padding: "36px 24px", marginBottom: 32 }}>
-
-            {/* Back button */}
-            <button
-                onClick={() => navigate("/mechanic/onboarding/vehicles")}
-                style={{ background: "#242424", border: "none", color: "#fff", width: 36, height: 36, borderRadius: "50%", fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}
-            >
-                ‹
-            </button>
-
-            <h1 style={{ color: "#fff", fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>
-                What problems can you fix?
-            </h1>
-            <p style={{ color: "#888", fontSize: 14, margin: "0 0 20px" }}>
-                Step 3 of 3 — Select all you're confident handling
-            </p>
-
-            {/* Progress bar — 3 segments, all filled for step 3 */}
-            <div style={{ display: "flex", gap: 6, marginBottom: 28 }}>
-                <div style={{ flex: 1, height: 4, borderRadius: 2, background: "#61cd96" }} />
-                <div style={{ flex: 1, height: 4, borderRadius: 2, background: "#61cd96" }} />
-                <div style={{ flex: 1, height: 4, borderRadius: 2, background: "#E63946" }} />
-            </div>
-
-            {selectedWheelers.map(wheeler => {
-                const problems = PROBLEMS_BY_WHEELER[wheeler];
-                const selected = selectedProblems[wheeler] || new Set();
-                const allSelected = problems.every(p => selected.has(p));
-
-                return (
-                    <div key={wheeler} style={{ background: "#242424", borderRadius: 12, padding: 16, marginBottom: 12 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                            <span style={{ color: "#fff", fontSize: 14, fontWeight: 600 }}>
-                                {WHEELER_LABELS[wheeler].icon} {WHEELER_LABELS[wheeler].label}
-                            </span>
-                            <button
-                                style={{ background: "none", border: "1px solid #333", borderRadius: 6, color: "#888", fontSize: 12, padding: "4px 10px", cursor: "pointer" }}
-                                onClick={() => toggleAll(wheeler)}
-                            >
-                                {allSelected ? "Deselect all" : "Select all"}
-                            </button>
-                        </div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                            {problems.map(problem => {
-                                const checked = selected.has(problem);
-                                return (
-                                    <div
-                                        key={problem}
-                                        onClick={() => toggleProblem(wheeler, problem)}
-                                        style={{
-                                            background: checked ? "#2a1518" : "#1a1a1a",
-                                            border: `1px solid ${checked ? "#E63946" : "#333"}`,
-                                            borderRadius: 20,
-                                            padding: "6px 12px",
-                                            color: checked ? "#fff" : "#888",
-                                            fontSize: 13,
-                                            cursor: "pointer",
-                                            userSelect: "none"
-                                        }}
-                                    >
-                                        {checked && <span style={{ color: "#E63946" }}>✓ </span>}
-                                        {formatLabel(problem)}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                );
-            })}
-
-            {error && (
-                <div style={{ background: "#2a1518", border: "1px solid #E63946", borderRadius: 8, padding: 12, color: "#E63946", fontSize: 14, marginBottom: 16 }}>
-                    {error}
+          return (
+            <div key={wheeler} style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 14,
+              padding: 14,
+            }}>
+              {/* Section header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 18 }}>{meta.icon}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{meta.label}</span>
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, color: "var(--gold)",
+                    background: "rgba(255,183,0,0.10)", border: "1px solid rgba(255,183,0,0.25)",
+                    borderRadius: 9999, padding: "2px 8px",
+                  }}>
+                    {sel.size}/{problems.length}
+                  </span>
                 </div>
-            )}
+                <button
+                  onClick={() => toggleAll(wheeler)}
+                  style={{
+                    background: "var(--surface3)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    color: "var(--text-3)",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: "4px 10px",
+                    cursor: "pointer",
+                    letterSpacing: "0.3px",
+                    fontFamily: "'Inter', sans-serif",
+                  }}
+                >
+                  {allSelected ? "Deselect all" : "Select all"}
+                </button>
+              </div>
 
-            <button
-                onClick={handleSubmit}
-                disabled={loading}
-                style={{
-                    width: "100%",
-                    background: "#E63946",
-                    border: "none",
-                    borderRadius: 12,
-                    padding: "15px",
-                    color: "#fff",
-                    fontSize: 16,
-                    fontWeight: 700,
-                    cursor: loading ? "not-allowed" : "pointer",
-                    opacity: loading ? 0.6 : 1,
-                    marginTop: 8
-                }}
-            >
-                {loading ? "Submitting..." : "Submit Application ✓"}
-            </button>
+              {/* Problem chips */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {problems.map(problem => {
+                  const checked = sel.has(problem);
+                  return (
+                    <button
+                      key={problem}
+                      onClick={() => toggleProblem(wheeler, problem)}
+                      style={{
+                        background: checked ? "rgba(230,57,70,0.10)" : "var(--surface2)",
+                        border: `1px solid ${checked ? "rgba(230,57,70,0.30)" : "var(--border)"}`,
+                        borderRadius: 9999,
+                        padding: "6px 12px",
+                        color: checked ? "var(--text)" : "var(--text-3)",
+                        fontSize: 12,
+                        fontWeight: checked ? 600 : 400,
+                        cursor: "pointer",
+                        fontFamily: "'Inter', sans-serif",
+                        transition: "all 0.15s ease",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {PROBLEM_LABELS[problem] ?? problem}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
+      {/* Error */}
+      {error && (
+        <div style={{
+          background: "rgba(230,57,70,0.10)",
+          border: "1px solid rgba(230,57,70,0.30)",
+          borderRadius: 10,
+          padding: "10px 13px",
+          color: "var(--red)",
+          fontSize: 13,
+          marginBottom: 16,
+        }}>
+          {error}
         </div>
+      )}
+
+      {/* Submit */}
+      <button
+        onClick={handleSubmit}
+        disabled={loading}
+        className="ps-btn"
+        style={{
+          borderRadius: 14,
+          fontSize: 15,
+          height: 52,
+          opacity: loading ? 0.6 : 1,
+          cursor: loading ? "not-allowed" : "pointer",
+        }}
+      >
+        {loading ? "Saving…" : "Complete registration →"}
+      </button>
     </div>
-);
+  );
 }

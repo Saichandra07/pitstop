@@ -2,453 +2,439 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
+import TopBar from "../components/TopBar";
+import Badge from "../components/Badge";
+import Avatar from "../components/Avatar";
 
-/* ─────────────────────────────────────────────
-   DESIGN TOKENS
-───────────────────────────────────────────── */
-const C = {
-  bg:      "#141414",
-  surface: "#1a1a1a",
-  raised:  "#1f1f1f",
-  border:  "#242424",
-  border2: "#2a2a2a",
-  red:     "#E63946",
-  green:   "#61cd96",
-  yellow:  "#FAC775",
-  blue:    "#6ab0f5",
-  dim:     "#555",
-  dimmer:  "#444",
-  dimmest: "#333",
-  text:    "#fff",
-  subtext: "#888",
+/* ─── Status mappings ──────────────────────────────────────────────────────── */
+const STATUS_BADGE = {
+  VERIFIED:    { variant: "green", label: "Verified"    },
+  PENDING:     { variant: "gold",  label: "Pending"     },
+  REJECTED:    { variant: "red",   label: "Rejected"    },
+  SUSPENDED:   { variant: "dim",   label: "Suspended"   },
+  IN_PROGRESS: { variant: "live",  label: "In Progress" },
+  ACCEPTED:    { variant: "live",  label: "Accepted"    },
+  COMPLETED:   { variant: "green", label: "Completed"   },
+  CANCELLED:   { variant: "red",   label: "Cancelled"   },
+  ACTIVE:      { variant: "green", label: "Active"      },
+  BANNED:      { variant: "red",   label: "Banned"      },
+  TIMED_OUT:   { variant: "gold",  label: "Timed out"   },
 };
 
-const STATUS = {
-  VERIFIED:    { color: C.green,  bg: "#0a1f14", border: "#0d2a1a", label: "Verified",    accent: C.green  },
-  PENDING:     { color: C.yellow, bg: "#1e1608", border: "#2a1f0a", label: "Pending",     accent: C.yellow },
-  REJECTED:    { color: C.red,    bg: "#1a0808", border: "#2a0a0a", label: "Rejected",    accent: C.red    },
-  SUSPENDED:   { color: C.dim,    bg: "#1a1a1a", border: "#2a2a2a", label: "Suspended",   accent: C.dim    },
-  IN_PROGRESS: { color: C.blue,   bg: "#080f1a", border: "#0a1530", label: "In Progress", accent: C.blue   },
-  ACCEPTED:    { color: C.blue,   bg: "#080f1a", border: "#0a1530", label: "Accepted",    accent: C.blue   },
-  COMPLETED:   { color: C.green,  bg: "#0a1f14", border: "#0d2a1a", label: "Completed",   accent: C.green  },
-  CANCELLED:   { color: C.red,    bg: "#1a0808", border: "#2a0a0a", label: "Cancelled",   accent: C.red    },
-  ACTIVE:      { color: C.green,  bg: "#0a1f14", border: "#0d2a1a", label: "Active",      accent: C.green  },
-  BANNED:      { color: C.red,    bg: "#1a0808", border: "#2a0a0a", label: "Banned",      accent: C.red    },
-  TIMED_OUT:   { color: C.yellow, bg: "#1e1608", border: "#2a1f0a", label: "Timed out",   accent: C.yellow },
+const STATUS_COLOR = {
+  VERIFIED:    "var(--green)",
+  PENDING:     "var(--gold)",
+  REJECTED:    "var(--red)",
+  SUSPENDED:   "var(--red)",
+  IN_PROGRESS: "var(--blue)",
+  ACCEPTED:    "var(--blue)",
+  COMPLETED:   "var(--green)",
+  CANCELLED:   "var(--text-3)",
+  ACTIVE:      "var(--green)",
+  BANNED:      "var(--red)",
+  TIMED_OUT:   "var(--gold)",
 };
 
-/* ─────────────────────────────────────────────
-   GLOBAL STYLES
-───────────────────────────────────────────── */
+/* ─── Injected styles (hover / focus / animation only) ────────────────────── */
 const STYLES = `
-  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
-  .adm-root * { box-sizing: border-box; margin: 0; padding: 0; }
-  .adm-root { font-family: 'DM Sans', sans-serif; background: #141414; color: #fff; min-height: 100vh; }
-  .adm-tab-item { transition: color 0.15s; }
-  .adm-filter-pill { transition: all 0.15s; }
-  .adm-filter-pill:hover { border-color: #444 !important; color: #aaa !important; }
-  .adm-card { transition: border-color 0.15s, box-shadow 0.15s; }
-  .adm-card:hover { border-color: #333 !important; box-shadow: 0 4px 24px rgba(0,0,0,0.3); }
-  .adm-btn { transition: opacity 0.12s, transform 0.1s; cursor: pointer; }
-  .adm-btn:hover { opacity: 0.82; }
-  .adm-btn:active { transform: scale(0.96); }
-  .adm-search { transition: border-color 0.15s; }
-  .adm-search:focus { border-color: #444 !important; outline: none; }
-  .adm-search::placeholder { color: #3a3a3a; }
-  .adm-inline-form { overflow: hidden; transition: max-height 0.22s cubic-bezier(0.4,0,0.2,1), padding 0.22s ease; }
-  .adm-mono { font-family: 'DM Mono', monospace; }
-  .adm-pulse { animation: admPulse 2s infinite; }
-  @keyframes admPulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-  .adm-dot-anim { animation: admDot 1.2s infinite; }
-  ::-webkit-scrollbar { display: none; }
+  .adm { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+  .adm-row { cursor: pointer; transition: background 0.12s; }
+  .adm-row:hover { background: var(--surface2) !important; }
+  .adm-tab { cursor: pointer; user-select: none; transition: color 0.15s; }
+  .adm-pill { cursor: pointer; transition: all 0.12s; }
+  .adm-pill:hover { border-color: var(--text-3) !important; }
+  .adm-btn { cursor: pointer; transition: opacity 0.12s; font-family: 'Inter', sans-serif; }
+  .adm-btn:hover { opacity: 0.78; }
+  .adm-btn:active { opacity: 0.6; }
+  .adm-in { transition: border-color 0.15s; font-family: 'Inter', sans-serif; }
+  .adm-in:focus { border-color: var(--red) !important; outline: none; }
+  .adm-in::placeholder { color: var(--text-3); opacity: 1; }
+  .adm-slide { overflow: hidden; transition: max-height 0.24s cubic-bezier(0.4,0,0.2,1); }
+  .adm-mono { font-family: 'Courier New', monospace; }
+  .adm-dot { animation: blink 2s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+  .chevron { transition: transform 0.2s ease; }
+  .adm-tabs { scrollbar-width: none; -ms-overflow-style: none; }
+  .adm-tabs::-webkit-scrollbar { display: none; }
 `;
 
 function injectStyles() {
   if (document.getElementById("adm-styles")) return;
-  const el = document.createElement("style");
-  el.id = "adm-styles";
-  el.textContent = STYLES;
-  document.head.appendChild(el);
+  const s = document.createElement("style");
+  s.id = "adm-styles";
+  s.textContent = STYLES;
+  document.head.appendChild(s);
 }
 
-/* ─────────────────────────────────────────────
-   PRIMITIVE COMPONENTS
-───────────────────────────────────────────── */
-function Badge({ status }) {
-  const s = STATUS[status] || STATUS.PENDING;
+/* ─── Micro components ─────────────────────────────────────────────────────── */
+
+function SBadge({ status }) {
+  const b = STATUS_BADGE[status] ?? { variant: "dim", label: status };
+  return <Badge variant={b.variant}>{b.label}</Badge>;
+}
+
+function Chevron({ open }) {
   return (
-    <span style={{
-      background: s.bg, color: s.color, border: `0.5px solid ${s.border}`,
-      borderRadius: 20, padding: "3px 9px", fontSize: 10, fontWeight: 600,
-      letterSpacing: "0.02em", whiteSpace: "nowrap", flexShrink: 0,
-    }}>{s.label}</span>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+      className="chevron" style={{ transform: open ? "rotate(180deg)" : "rotate(0)" }}>
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
   );
 }
 
-const AVATAR_PALETTE = [C.red, C.yellow, C.green, C.blue, "#a78bfa", "#f472b6", "#fb923c"];
-function avatarColor(name) {
-  if (!name) return C.dim;
-  return AVATAR_PALETTE[name.charCodeAt(0) % AVATAR_PALETTE.length];
-}
-
-function Avatar({ name, size = 36 }) {
-  const bg = avatarColor(name);
-  const initials = (name || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-  const light = [C.yellow, C.green].includes(bg);
+function Slide({ open, children }) {
   return (
-    <div style={{
-      width: size, height: size, borderRadius: "50%", background: bg, flexShrink: 0,
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: size * 0.3, fontWeight: 700, color: light ? "#141414" : "#fff",
-      boxShadow: `0 0 0 2px #141414, 0 0 0 3.5px ${bg}44`,
-    }}>{initials}</div>
+    <div className="adm-slide" style={{ maxHeight: open ? 260 : 0 }}>
+      <div style={{ padding: "12px 14px 14px", borderTop: "1px solid var(--border)" }}>
+        {children}
+      </div>
+    </div>
   );
 }
 
-function Stars({ rating }) {
-  if (!rating) return null;
-  const full = Math.floor(rating);
+function ABtn({ label, color = "ghost", onClick, full = true, small }) {
+  const map = {
+    green: { bg: "rgba(74,222,128,0.09)",  bd: "rgba(74,222,128,0.28)", tx: "var(--green)" },
+    red:   { bg: "rgba(230,57,70,0.09)",   bd: "rgba(230,57,70,0.28)",  tx: "var(--red)"   },
+    gold:  { bg: "rgba(255,183,0,0.09)",   bd: "rgba(255,183,0,0.28)",  tx: "var(--gold)"  },
+    ghost: { bg: "var(--surface2)",        bd: "var(--border)",         tx: "var(--text-3)" },
+  };
+  const c = map[color];
   return (
-    <span style={{ fontSize: 10, letterSpacing: 1 }}>
-      {"★".repeat(full)}<span style={{ color: C.dimmer }}>{"★".repeat(5 - full)}</span>
-      <span className="adm-mono" style={{ color: C.yellow, marginLeft: 5, fontSize: 10 }}>{Number(rating).toFixed(1)}</span>
-    </span>
+    <button className="adm-btn" onClick={onClick} style={{
+      flex: full ? 1 : "none",
+      height: small ? 30 : 36,
+      padding: small ? "0 12px" : "0",
+      borderRadius: 10,
+      background: c.bg, border: `1px solid ${c.bd}`, color: c.tx,
+      fontSize: small ? 11 : 12, fontWeight: 600,
+    }}>{label}</button>
   );
 }
 
-function SearchBar({ value, onChange, placeholder }) {
+function BtnRow({ children }) {
+  return <div style={{ display: "flex", gap: 8 }}>{children}</div>;
+}
+
+function Field({ placeholder, type = "text", value, onChange }) {
   return (
-    <div style={{ position: "relative", marginBottom: 10 }}>
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.dim} strokeWidth="2.5"
+    <input type={type} className="adm-in" placeholder={placeholder} value={value} onChange={onChange}
+      style={{
+        display: "block", width: "100%", height: 38, borderRadius: 10, marginBottom: 8,
+        background: "var(--surface2)", border: "1px solid var(--border)",
+        color: "var(--text)", fontSize: 13, padding: "0 12px",
+      }}
+    />
+  );
+}
+
+function Select({ value, onChange, options }) {
+  return (
+    <select value={value} onChange={onChange} className="adm-in" style={{
+      display: "block", width: "100%", height: 38, borderRadius: 10, marginBottom: 8,
+      background: "var(--surface2)", border: "1px solid var(--border)",
+      color: value ? "var(--text)" : "var(--text-3)",
+      fontSize: 13, padding: "0 12px", appearance: "none",
+    }}>
+      <option value="">Select reason…</option>
+      {options.map(o => <option key={o.id} value={o.reason}>{o.reason}</option>)}
+    </select>
+  );
+}
+
+function Search({ value, onChange, placeholder }) {
+  return (
+    <div style={{ position: "relative", marginBottom: 12 }}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+        stroke="var(--text-3)" strokeWidth="2.2" strokeLinecap="round"
         style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
-        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
       </svg>
-      <input className="adm-search" placeholder={placeholder} value={value} onChange={onChange}
+      <input className="adm-in" placeholder={placeholder} value={value} onChange={onChange}
         style={{
-          width: "100%", height: 38, background: C.surface,
-          border: `0.5px solid ${C.border2}`, borderRadius: 10,
-          color: C.text, fontSize: 12, paddingLeft: 32, paddingRight: 12,
+          width: "100%", height: 42, borderRadius: 12,
+          background: "var(--surface)", border: "1px solid var(--border)",
+          color: "var(--text)", fontSize: 13, paddingLeft: 34, paddingRight: 12,
         }}
       />
     </div>
   );
 }
 
-function FilterPills({ filters, active, onChange }) {
+function Pills({ options, active, onChange }) {
   return (
     <div style={{ display: "flex", gap: 6, marginBottom: 14, overflowX: "auto" }}>
-      {filters.map(f => (
-        <span key={f.value} className="adm-filter-pill" onClick={() => onChange(f.value)} style={{
-          padding: "5px 13px", borderRadius: 20, fontSize: 11, cursor: "pointer",
-          whiteSpace: "nowrap", flexShrink: 0, fontWeight: active === f.value ? 600 : 400,
-          background: active === f.value ? C.red : C.surface,
-          border: `0.5px solid ${active === f.value ? C.red : C.border2}`,
-          color: active === f.value ? "#fff" : C.dim,
-        }}>{f.label}</span>
+      {options.map(o => (
+        <button key={o.value} className="adm-pill adm-btn" onClick={() => onChange(o.value)} style={{
+          height: 28, padding: "0 12px", borderRadius: 9999, flexShrink: 0,
+          background: active === o.value ? "var(--red)" : "transparent",
+          border: `1px solid ${active === o.value ? "var(--red)" : "var(--border)"}`,
+          color: active === o.value ? "var(--text)" : "var(--text-3)",
+          fontSize: 11, fontWeight: active === o.value ? 600 : 400,
+        }}>{o.label}</button>
       ))}
     </div>
   );
 }
 
-function Card({ children, status, style }) {
-  const accent = status ? (STATUS[status]?.accent || C.border) : C.border;
+function Empty({ icon = "◌", text }) {
   return (
-    <div className="adm-card" style={{
-      background: C.surface, borderRadius: 12, marginBottom: 10, overflow: "hidden",
-      border: `0.5px solid ${C.border}`, borderLeft: `2.5px solid ${accent}`,
-      ...style,
-    }}>{children}</div>
-  );
-}
-
-function CardBody({ children }) {
-  return <div style={{ padding: "13px 14px" }}>{children}</div>;
-}
-
-function InlineForm({ open, children }) {
-  return (
-    <div className="adm-inline-form" style={{
-      maxHeight: open ? 200 : 0,
-      padding: open ? "12px 14px" : "0 14px",
-      borderTop: open ? `0.5px solid #1e1e1e` : "none",
-      background: "#111",
-    }}>
-      {open && children}
+    <div style={{ textAlign: "center", padding: "44px 0" }}>
+      <div style={{ fontSize: 30, opacity: 0.12, marginBottom: 10 }}>{icon}</div>
+      <div style={{ fontSize: 12, color: "var(--text-3)" }}>{text}</div>
     </div>
   );
 }
 
-function TinyInput({ placeholder, type = "text", value, onChange }) {
+function Loader() {
   return (
-    <input type={type} placeholder={placeholder} value={value} onChange={onChange}
-      style={{
-        width: "100%", height: 34, background: C.raised, border: `0.5px solid ${C.border2}`,
-        borderRadius: 8, color: C.text, fontSize: 12, padding: "0 10px",
-        outline: "none", marginBottom: 8,
-      }}
-    />
-  );
-}
-
-function TinySelect({ value, onChange, options }) {
-  return (
-    <select value={value} onChange={onChange} style={{
-      width: "100%", height: 34, background: C.raised, border: `0.5px solid ${C.border2}`,
-      borderRadius: 8, color: value ? C.text : C.dim, fontSize: 12, padding: "0 10px",
-      outline: "none", marginBottom: 8, appearance: "none",
-    }}>
-      <option value="">Select reason...</option>
-      {options.map(o => <option key={o.id} value={o.reason}>{o.reason}</option>)}
-    </select>
-  );
-}
-
-function BtnRow({ children, style }) {
-  return <div style={{ display: "flex", gap: 7, ...style }}>{children}</div>;
-}
-
-const BTN_VARIANTS = {
-  green:  { bg: "#0a1f14", border: "#0d2a1a", color: C.green  },
-  red:    { bg: "#1a0808", border: "#2a0a0a", color: C.red    },
-  yellow: { bg: "#1e1608", border: "#2a1f0a", color: C.yellow },
-  ghost:  { bg: C.raised,  border: C.border2, color: C.dim    },
-};
-
-function Btn({ label, variant = "ghost", onClick, small, style }) {
-  const v = BTN_VARIANTS[variant];
-  return (
-    <button className="adm-btn" onClick={onClick} style={{
-      flex: 1, height: small ? 30 : 34, borderRadius: 9,
-      background: v.bg, border: `0.5px solid ${v.border}`,
-      color: v.color, fontSize: small ? 11 : 12, fontWeight: 600,
-      ...style,
-    }}>{label}</button>
-  );
-}
-
-function SectionLabel({ children }) {
-  return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 10,
-      fontSize: 10, color: C.dim, letterSpacing: "0.09em",
-      textTransform: "uppercase", fontWeight: 600, marginBottom: 12,
-    }}>
-      <div style={{ flex: 1, height: "0.5px", background: C.border }} />
-      {children}
-      <div style={{ flex: 1, height: "0.5px", background: C.border }} />
-    </div>
-  );
-}
-
-function EmptyState({ text }) {
-  return (
-    <div style={{ textAlign: "center", padding: "36px 0", color: C.dim, fontSize: 12 }}>
-      <div style={{ fontSize: 24, marginBottom: 8, opacity: 0.3 }}>○</div>
-      {text}
-    </div>
-  );
-}
-
-function Loading() {
-  return (
-    <div style={{ textAlign: "center", padding: "36px 0", display: "flex", justifyContent: "center", gap: 6 }}>
+    <div style={{ display: "flex", justifyContent: "center", gap: 6, padding: "44px 0" }}>
       {[0, 1, 2].map(i => (
-        <div key={i} className="adm-pulse" style={{
-          width: 6, height: 6, borderRadius: "50%", background: C.red,
-          animationDelay: `${i * 0.15}s`,
+        <div key={i} className="adm-dot" style={{
+          width: 6, height: 6, borderRadius: "50%",
+          background: "var(--red)", animationDelay: `${i * 0.18}s`,
         }} />
       ))}
     </div>
   );
 }
 
-function ExpertiseChips({ list }) {
-  if (!list?.length) return null;
-  const show = list.slice(0, 4);
-  const extra = list.length - 4;
+/* ─── Stats mini strip ──────────────────────────────────────────────────────── */
+function MiniStats({ stats }) {
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, margin: "8px 0" }}>
-      {show.map((tag, i) => (
-        <span key={i} style={{
-          background: "#1e1e1e", border: `0.5px solid ${C.border2}`,
-          borderRadius: 20, padding: "2px 9px", fontSize: 10, color: C.subtext,
-        }}>{tag}</span>
+    <div style={{
+      display: "flex", borderTop: "1px solid var(--border)",
+      background: "var(--surface2)",
+    }}>
+      {stats.map((s, i, arr) => (
+        <div key={s.label} style={{
+          flex: 1, padding: "8px 0", textAlign: "center",
+          borderRight: i < arr.length - 1 ? "1px solid var(--border)" : "none",
+        }}>
+          <div className="adm-mono" style={{ fontSize: 14, fontWeight: 700, color: s.color ?? "var(--text)", lineHeight: 1 }}>
+            {s.value}
+          </div>
+          <div style={{ fontSize: 9, color: "var(--text-3)", marginTop: 3, textTransform: "uppercase", letterSpacing: "0.8px" }}>
+            {s.label}
+          </div>
+        </div>
       ))}
-      {extra > 0 && (
-        <span style={{
-          background: "#1e1e1e", border: `0.5px solid ${C.border2}`,
-          borderRadius: 20, padding: "2px 9px", fontSize: 10, color: C.dim,
-        }}>+{extra} more</span>
-      )}
     </div>
   );
 }
 
-/* ─────────────────────────────────────────────
-   OVERVIEW TAB
-───────────────────────────────────────────── */
-const STAT_META = {
-  "Active jobs":           { icon: "⚡", color: C.green  },
-  "Online mechanics":      { icon: "🔧", color: C.green  },
-  "Pending verifications": { icon: "⏳", color: C.red    },
-  "Pending reports":       { icon: "⚠",  color: C.yellow },
-};
+/* ─── Section heading ───────────────────────────────────────────────────────── */
+function SectionHead({ children }) {
+  return (
+    <div style={{
+      fontSize: 9, fontWeight: 700, color: "var(--text-3)",
+      textTransform: "uppercase", letterSpacing: "2px", marginBottom: 14,
+    }}>{children}</div>
+  );
+}
+
+/* ─── Left-bar card shell ──────────────────────────────────────────────────── */
+function ItemCard({ status, children, style }) {
+  return (
+    <div style={{
+      background: "var(--surface)",
+      border: "1px solid var(--border)",
+      borderLeft: `4px solid ${STATUS_COLOR[status] ?? "var(--border)"}`,
+      borderRadius: 14, marginBottom: 8, overflow: "hidden",
+      ...style,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  OVERVIEW TAB                                                               */
+/* ═══════════════════════════════════════════════════════════════════════════ */
 
 function OverviewTab({ stats }) {
-  const cards = [
-    { label: "Active jobs",           value: stats.activeJobs,      color: C.green  },
-    { label: "Online mechanics",      value: stats.onlineMechanics, color: C.green  },
-    { label: "Pending verifications", value: stats.pendingVerify,   color: C.red    },
-    { label: "Pending reports",       value: stats.pendingReports,  color: C.yellow },
+  const tiles = [
+    { label: "Active Jobs",           value: stats.activeJobs,      color: "var(--green)", stripe: "rgba(74,222,128,0.70)"  },
+    { label: "Online Mechanics",      value: stats.onlineMechanics, color: "var(--green)", stripe: "rgba(74,222,128,0.70)"  },
+    { label: "Pending Verifications", value: stats.pendingVerify,   color: "var(--red)",   stripe: "rgba(230,57,70,0.85)"   },
+    { label: "Pending Reports",       value: stats.pendingReports,  color: "var(--gold)",  stripe: "rgba(255,183,0,0.75)"   },
   ];
 
   return (
     <>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
-        {cards.map(c => {
-          const meta = STAT_META[c.label];
-          const hasValue = (c.value ?? 0) > 0;
-          return (
-            <div key={c.label} style={{
-              background: C.surface, borderRadius: 14, padding: "14px 14px 12px",
-              border: `0.5px solid ${C.border}`,
-              borderBottom: `2px solid ${c.color}${hasValue ? "55" : "18"}`,
-              position: "relative", overflow: "hidden",
-            }}>
-              <div style={{
-                position: "absolute", top: -20, right: -20,
-                width: 70, height: 70, borderRadius: "50%",
-                background: c.color, opacity: hasValue ? 0.05 : 0.02,
-                pointerEvents: "none",
-              }} />
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <span style={{ fontSize: 16 }}>{meta.icon}</span>
-                <div style={{
-                  width: 7, height: 7, borderRadius: "50%",
-                  background: c.color, opacity: hasValue ? 1 : 0.2,
-                  boxShadow: hasValue ? `0 0 8px ${c.color}` : "none",
-                }} />
-              </div>
-              <div className="adm-mono" style={{
-                fontSize: 30, fontWeight: 500, color: c.color, lineHeight: 1,
-                textShadow: hasValue ? `0 0 30px ${c.color}50` : "none",
-              }}>{c.value ?? "—"}</div>
-              <div style={{ fontSize: 10, color: C.dim, marginTop: 6, letterSpacing: "0.03em", lineHeight: 1.3 }}>{c.label}</div>
-            </div>
-          );
-        })}
-      </div>
-
-      <SectionLabel>Recent Activity</SectionLabel>
-
-      <div style={{ background: C.surface, borderRadius: 12, border: `0.5px solid ${C.border}`, overflow: "hidden" }}>
-        {!(stats.recentActivity?.length) ? (
-          <EmptyState text="No recent activity" />
-        ) : stats.recentActivity.map((item, i, arr) => (
-          <div key={i} style={{
-            padding: "11px 14px",
-            borderBottom: i < arr.length - 1 ? `0.5px solid #1c1c1c` : "none",
-            display: "flex", alignItems: "center", gap: 10,
+      {/* 2 × 2 stat grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 24 }}>
+        {tiles.map(t => (
+          <div key={t.label} style={{
+            background: "var(--surface)", border: "1px solid var(--border)",
+            borderRadius: 16, overflow: "hidden",
           }}>
-            <div className="adm-pulse" style={{
-              width: 7, height: 7, borderRadius: "50%",
-              background: item.color, boxShadow: `0 0 6px ${item.color}`,
-              flexShrink: 0,
-            }} />
-            <span style={{ fontSize: 12, color: "#ccc", fontWeight: 500 }}>{item.name}</span>
-            <span style={{ fontSize: 11, color: C.dim }}>{item.action}</span>
-            <span className="adm-mono" style={{ marginLeft: "auto", fontSize: 10, color: C.dimmer }}>{item.time}</span>
+            <div style={{ height: 3, background: t.stripe }} />
+            <div style={{ padding: "16px 14px 14px" }}>
+              <div style={{
+                fontSize: 42, fontWeight: 800, color: t.color,
+                lineHeight: 1, letterSpacing: "-2px",
+                fontVariantNumeric: "tabular-nums",
+              }}>
+                {t.value ?? "—"}
+              </div>
+              <div style={{
+                fontSize: 9, fontWeight: 600, color: "var(--text-3)",
+                marginTop: 10, textTransform: "uppercase", letterSpacing: "1.5px",
+              }}>
+                {t.label}
+              </div>
+            </div>
           </div>
         ))}
       </div>
+
+      {/* Live feed */}
+      <SectionHead>Live Feed</SectionHead>
+
+      {!(stats.recentActivity?.length) ? (
+        <Empty icon="📡" text="No recent activity" />
+      ) : (
+        <div style={{
+          background: "var(--surface)", border: "1px solid var(--border)",
+          borderRadius: 14, overflow: "hidden",
+        }}>
+          {stats.recentActivity.map((item, i, arr) => (
+            <div key={i} style={{
+              display: "flex", alignItems: "center", gap: 12,
+              padding: "12px 14px",
+              borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
+            }}>
+              <div className="adm-dot" style={{
+                width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                background: item.color, boxShadow: `0 0 6px ${item.color}`,
+              }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{item.name}</span>
+                <span style={{ fontSize: 11, color: "var(--text-3)", marginLeft: 7 }}>{item.action}</span>
+              </div>
+              <span className="adm-mono" style={{ fontSize: 10, color: "var(--text-3)", flexShrink: 0 }}>
+                {item.time}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </>
   );
 }
 
-/* ─────────────────────────────────────────────
-   VERIFY TAB
-───────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  VERIFY TAB                                                                 */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
 function VerifyTab({ rejectionReasons, onAction }) {
-  const [pending, setPending]         = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [openReject, setOpenReject]   = useState(null);
-  const [selectedReason, setSelected] = useState({});
+  const [pending, setPending]       = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [openReject, setOpenReject] = useState(null);
+  const [reason, setReason]         = useState({});
 
   useEffect(() => {
     api.get("/admin/mechanics/pending")
       .then(r => setPending(r.data)).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
-  const handleApprove = async (id) => {
+  const approve = async (id) => {
     await api.patch(`/admin/mechanics/${id}/verify`, { action: "APPROVE" });
     setPending(p => p.filter(m => m.id !== id));
     onAction();
   };
 
-  const handleReject = async (id) => {
-    const reason = selectedReason[id];
-    if (!reason) return;
-    await api.patch(`/admin/mechanics/${id}/verify`, { action: "REJECT", rejectionReason: reason });
+  const reject = async (id) => {
+    if (!reason[id]) return;
+    await api.patch(`/admin/mechanics/${id}/verify`, { action: "REJECT", rejectionReason: reason[id] });
     setPending(p => p.filter(m => m.id !== id));
     setOpenReject(null);
     onAction();
   };
 
-  if (loading) return <Loading />;
-  if (!pending.length) return <EmptyState text="No pending applications" />;
+  if (loading) return <Loader />;
+  if (!pending.length) return <Empty icon="✓" text="No pending applications" />;
 
-  return pending.map(m => (
-    <Card key={m.id} status="PENDING">
-      <CardBody>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Avatar name={m.name} size={38} />
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 2 }}>{m.name}</div>
-              <div style={{ fontSize: 11, color: C.dim }}>{m.phone} · {m.serviceRadiusKm}km</div>
-              {m.area && <div style={{ fontSize: 10, color: C.dimmer, marginTop: 2 }}>📍 {m.area}</div>}
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {pending.map(m => (
+        <ItemCard key={m.id} status="PENDING">
+          {/* Profile row */}
+          <div style={{ padding: "14px 14px 12px", display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <Avatar name={m.name} size="md" variant="gold" />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.2px", marginBottom: 3 }}>
+                {m.name}
+              </div>
+              <div style={{ fontSize: 11, color: "var(--text-3)" }}>
+                {m.phone} · {m.serviceRadiusKm}km radius
+              </div>
+              {m.area && (
+                <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 2 }}>📍 {m.area}</div>
+              )}
+              <span className="adm-mono" style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4, display: "block" }}>
+                Applied {m.createdAt ? new Date(m.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+              </span>
             </div>
+            <SBadge status="PENDING" />
           </div>
-          <Badge status="PENDING" />
-        </div>
 
-        <ExpertiseChips list={m.expertiseSummary} />
+          {/* Expertise chips */}
+          {m.expertiseSummary?.length > 0 && (
+            <div style={{ padding: "0 14px 12px", display: "flex", flexWrap: "wrap", gap: 5 }}>
+              {m.expertiseSummary.slice(0, 5).map((tag, i) => (
+                <span key={i} style={{
+                  background: "var(--surface2)", border: "1px solid var(--border)",
+                  borderRadius: 9999, padding: "3px 9px", fontSize: 10, color: "var(--text-2)",
+                }}>{tag}</span>
+              ))}
+              {m.expertiseSummary.length > 5 && (
+                <span style={{
+                  background: "var(--surface2)", border: "1px solid var(--border)",
+                  borderRadius: 9999, padding: "3px 9px", fontSize: 10, color: "var(--text-3)",
+                }}>+{m.expertiseSummary.length - 5} more</span>
+              )}
+            </div>
+          )}
 
-        <div className="adm-mono" style={{ fontSize: 10, color: C.dimmer, marginBottom: 10 }}>
-          Applied {m.createdAt ? new Date(m.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
-        </div>
+          {/* Decision buttons */}
+          <div style={{ padding: "0 14px 14px", display: "flex", gap: 8 }}>
+            <ABtn label="✓  Approve" color="green" onClick={() => approve(m.id)} />
+            <ABtn
+              label={openReject === m.id ? "Cancel" : "✕  Reject"}
+              color={openReject === m.id ? "ghost" : "red"}
+              onClick={() => setOpenReject(openReject === m.id ? null : m.id)}
+            />
+          </div>
 
-        <BtnRow>
-          <Btn label="✓ Approve" variant="green" onClick={() => handleApprove(m.id)} />
-          <Btn label="✕ Reject"  variant="red"   onClick={() => setOpenReject(openReject === m.id ? null : m.id)} />
-        </BtnRow>
-      </CardBody>
-
-      <InlineForm open={openReject === m.id}>
-        <div style={{ fontSize: 11, color: C.dim, marginBottom: 7 }}>Select rejection reason</div>
-        <TinySelect
-          value={selectedReason[m.id] || ""}
-          onChange={e => setSelected(p => ({ ...p, [m.id]: e.target.value }))}
-          options={rejectionReasons}
-        />
-        <BtnRow>
-          <Btn label="Confirm reject" variant="red"   small onClick={() => handleReject(m.id)} />
-          <Btn label="Cancel"         variant="ghost" small onClick={() => setOpenReject(null)} />
-        </BtnRow>
-      </InlineForm>
-    </Card>
-  ));
+          {/* Reject form */}
+          <Slide open={openReject === m.id}>
+            <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8 }}>Select rejection reason</div>
+            <Select
+              value={reason[m.id] || ""}
+              onChange={e => setReason(p => ({ ...p, [m.id]: e.target.value }))}
+              options={rejectionReasons}
+            />
+            <ABtn label="Confirm Reject" color="red" onClick={() => reject(m.id)} />
+          </Slide>
+        </ItemCard>
+      ))}
+    </div>
+  );
 }
 
-/* ─────────────────────────────────────────────
-   MECHANICS TAB
-───────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  MECHANICS TAB                                                              */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
 function MechanicsTab() {
   const [mechanics, setMechanics]     = useState([]);
   const [search, setSearch]           = useState("");
   const [filter, setFilter]           = useState("");
   const [loading, setLoading]         = useState(true);
-  const [openSuspend, setOpen]        = useState(null);
+  const [expanded, setExpanded]       = useState(null);
   const [suspendForm, setSuspendForm] = useState({});
 
   const load = useCallback(() => {
@@ -461,147 +447,109 @@ function MechanicsTab() {
 
   useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
 
-  const handleSuspend = async (id) => {
+  const suspend   = async (id) => {
     const f = suspendForm[id] || {};
     if (!f.reason || !f.days) return;
     await api.post(`/admin/mechanics/${id}/suspend`, { reason: f.reason, suspensionDays: parseInt(f.days) });
-    setOpen(null); load();
+    setExpanded(null); load();
   };
-  const handleUnsuspend = async (id) => { await api.post(`/admin/mechanics/${id}/unsuspend`); load(); };
-  const handleDelete    = async (id) => { if (!window.confirm("Permanently delete mechanic?")) return; await api.delete(`/admin/mechanics/${id}`); load(); };
+  const unsuspend = async (id) => { await api.post(`/admin/mechanics/${id}/unsuspend`); load(); };
+  const del       = async (id) => {
+    if (!window.confirm("Permanently delete mechanic?")) return;
+    await api.delete(`/admin/mechanics/${id}`); load();
+  };
+
+  const toggle = id => setExpanded(e => e === id ? null : id);
 
   return (
     <>
-      <SearchBar value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or area..." />
-      <FilterPills
-        filters={[
-          { value: "",          label: "All"       },
-          { value: "VERIFIED",  label: "Verified"  },
-          { value: "SUSPENDED", label: "Suspended" },
-          { value: "REJECTED",  label: "Rejected"  },
+      <Search value={search} onChange={e => setSearch(e.target.value)} placeholder="Search mechanics…" />
+      <Pills
+        options={[
+          { value: "", label: "All" }, { value: "VERIFIED", label: "Verified" },
+          { value: "SUSPENDED", label: "Suspended" }, { value: "REJECTED", label: "Rejected" },
         ]}
         active={filter} onChange={setFilter}
       />
 
-      {loading ? <Loading /> : !mechanics.length ? <EmptyState text="No mechanics found" /> :
+      {loading ? <Loader /> : !mechanics.length ? <Empty text="No mechanics found" /> :
         mechanics.map(m => {
           const st = m.verificationStatus;
-          const accent = STATUS[st]?.accent || C.border;
+          const isOpen = expanded === m.id;
           const isSuspended = st === "SUSPENDED";
-          const initials = (m.name || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-          const light = [C.yellow, C.green].includes(accent);
+
           return (
-            <div key={m.id} style={{
-              background: C.surface, borderRadius: 16, marginBottom: 12,
-              border: `0.5px solid ${C.border}`, overflow: "hidden",
-            }}>
-              <div style={{ padding: "16px 16px 14px" }}>
-
-                {/* Top row — square avatar + name block + badge */}
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 16 }}>
-                  <div style={{
-                    width: 54, height: 54, borderRadius: 14, background: accent,
-                    flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 20, fontWeight: 800, color: light ? "#141414" : "#fff",
-                    boxShadow: `0 4px 16px ${accent}44`,
-                  }}>{initials}</div>
-
-                  <div style={{ flex: 1, minWidth: 0, paddingTop: 2, textAlign: "left" }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: isSuspended ? C.dim : C.text, marginBottom: 3, letterSpacing: "-0.2px" }}>
-                      {m.name}
-                    </div>
-                    <Stars rating={m.rating} />
-                    {m.area && (
-                      <div className="adm-mono" style={{ fontSize: 10, color: C.dimmer, marginTop: 3 }}>📍 {m.area}</div>
-                    )}
+            <ItemCard key={m.id} status={st}>
+              {/* Header row — tap to expand */}
+              <div className="adm-row" onClick={() => toggle(m.id)} style={{
+                padding: "13px 14px", display: "flex", alignItems: "center", gap: 12,
+              }}>
+                <Avatar name={m.name} size="sm" variant={isSuspended ? "red" : "muted"} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: isSuspended ? "var(--text-3)" : "var(--text)", letterSpacing: "-0.1px" }}>
+                    {m.name}
                   </div>
-
-                  <Badge status={st} />
-                </div>
-
-                {/* Stats row */}
-                <div style={{
-                  display: "flex",
-                  background: C.raised, borderRadius: 12,
-                  border: `0.5px solid ${C.border2}`, marginBottom: 14,
-                  overflow: "hidden",
-                }}>
-                  {[
-                    { label: "Jobs done", value: m.totalJobsCompleted ?? 0       },
-                    { label: "Cancels",   value: m.midJobCancels ?? 0            },
-                    { label: "Radius",    value: `${m.serviceRadiusKm ?? 0}km`   },
-                  ].map((s, i, arr) => (
-                    <div key={s.label} style={{
-                      flex: 1, padding: "10px 0", textAlign: "center",
-                      borderRight: i < arr.length - 1 ? `0.5px solid ${C.border2}` : "none",
-                    }}>
-                      <div className="adm-mono" style={{ fontSize: 16, fontWeight: 600, color: C.text, lineHeight: 1 }}>{s.value}</div>
-                      <div style={{ fontSize: 10, color: C.dim, marginTop: 4, letterSpacing: "0.02em" }}>{s.label}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Suspension banner */}
-                {isSuspended && m.suspensionReason && (
-                  <div style={{
-                    background: "#180808", border: `0.5px solid #2a1010`, borderRadius: 10,
-                    padding: "8px 12px", marginBottom: 14, fontSize: 11, color: "#b05050",
-                  }}>
-                    ⚠ {m.suspensionReason}
-                    {m.suspensionEndsAt && (
-                      <span style={{ color: C.dim }}> · ends {new Date(m.suspensionEndsAt).toLocaleDateString("en-IN")}</span>
-                    )}
+                  <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>
+                    {m.rating ? `⭐ ${Number(m.rating).toFixed(1)}` : "New"} · {m.serviceRadiusKm}km radius
                   </div>
-                )}
-
-                {/* Action buttons */}
-                {isSuspended ? (
-                  <BtnRow>
-                    <button className="adm-btn" onClick={() => handleUnsuspend(m.id)} style={{
-                      flex: 1, height: 38, borderRadius: 10, border: "none",
-                      background: C.green, color: "#141414", fontSize: 12, fontWeight: 700,
-                    }}>Unsuspend</button>
-                    <button className="adm-btn" onClick={() => handleDelete(m.id)} style={{
-                      width: 38, height: 38, borderRadius: 10,
-                      background: "#1a0808", border: `0.5px solid #2a0a0a`,
-                      color: C.red, fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>×</button>
-                  </BtnRow>
-                ) : (
-                  <BtnRow>
-                    <button className="adm-btn" onClick={() => setOpen(openSuspend === m.id ? null : m.id)} style={{
-                      flex: 1, height: 38, borderRadius: 10,
-                      background: "#1e1608", border: `0.5px solid #2a1f0a`,
-                      color: C.yellow, fontSize: 12, fontWeight: 600,
-                    }}>Suspend</button>
-                    <button className="adm-btn" onClick={() => handleDelete(m.id)} style={{
-                      width: 38, height: 38, borderRadius: 10,
-                      background: C.raised, border: `0.5px solid ${C.border2}`,
-                      color: C.dim, fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>×</button>
-                  </BtnRow>
-                )}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  <SBadge status={st} />
+                  <span style={{ color: "var(--text-3)", display: "flex" }}>
+                    <Chevron open={isOpen} />
+                  </span>
+                </div>
               </div>
 
-              <InlineForm open={openSuspend === m.id}>
-                <div style={{ fontSize: 11, color: C.dim, marginBottom: 7 }}>Suspension details</div>
-                <TinyInput
-                  placeholder="Reason for suspension..."
-                  value={suspendForm[m.id]?.reason || ""}
-                  onChange={e => setSuspendForm(p => ({ ...p, [m.id]: { ...p[m.id], reason: e.target.value } }))}
-                />
-                <TinyInput
-                  placeholder="Duration in days (e.g. 3)"
-                  type="number"
-                  value={suspendForm[m.id]?.days || ""}
-                  onChange={e => setSuspendForm(p => ({ ...p, [m.id]: { ...p[m.id], days: e.target.value } }))}
-                />
-                <BtnRow>
-                  <Btn label="Confirm suspend" variant="yellow" small onClick={() => handleSuspend(m.id)} />
-                  <Btn label="Cancel"          variant="ghost"  small onClick={() => setOpen(null)} />
-                </BtnRow>
-              </InlineForm>
-            </div>
+              {/* Stats strip */}
+              <MiniStats stats={[
+                { label: "Jobs",    value: m.totalJobsCompleted ?? 0,    color: "var(--text)" },
+                { label: "Cancels", value: m.midJobCancels ?? 0,         color: m.midJobCancels > 0 ? "var(--red)" : "var(--text)" },
+                { label: "Radius",  value: `${m.serviceRadiusKm ?? 0}km`, color: "var(--text)" },
+              ]} />
+
+              {/* Suspension reason banner */}
+              {isSuspended && m.suspensionReason && (
+                <div style={{
+                  margin: "10px 14px 0",
+                  background: "rgba(230,57,70,0.06)", border: "1px solid rgba(230,57,70,0.18)",
+                  borderRadius: 8, padding: "7px 10px", fontSize: 11, color: "var(--red)",
+                }}>
+                  ⚠ {m.suspensionReason}
+                  {m.suspensionEndsAt && (
+                    <span style={{ color: "var(--text-3)" }}> · ends {new Date(m.suspensionEndsAt).toLocaleDateString("en-IN")}</span>
+                  )}
+                </div>
+              )}
+
+              {/* Expandable actions */}
+              <Slide open={isOpen}>
+                {isSuspended ? (
+                  <BtnRow>
+                    <ABtn label="Unsuspend" color="green" onClick={() => unsuspend(m.id)} />
+                    <ABtn label="Delete" color="red" onClick={() => del(m.id)} />
+                  </BtnRow>
+                ) : (
+                  <>
+                    <Field
+                      placeholder="Suspension reason…"
+                      value={suspendForm[m.id]?.reason || ""}
+                      onChange={e => setSuspendForm(p => ({ ...p, [m.id]: { ...p[m.id], reason: e.target.value } }))}
+                    />
+                    <Field
+                      type="number"
+                      placeholder="Days (e.g. 3)"
+                      value={suspendForm[m.id]?.days || ""}
+                      onChange={e => setSuspendForm(p => ({ ...p, [m.id]: { ...p[m.id], days: e.target.value } }))}
+                    />
+                    <BtnRow>
+                      <ABtn label="Suspend" color="gold" onClick={() => suspend(m.id)} />
+                      <ABtn label="Delete"  color="red"  onClick={() => del(m.id)} />
+                    </BtnRow>
+                  </>
+                )}
+              </Slide>
+            </ItemCard>
           );
         })
       }
@@ -609,9 +557,10 @@ function MechanicsTab() {
   );
 }
 
-/* ─────────────────────────────────────────────
-   JOBS TAB
-───────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  JOBS TAB                                                                   */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
 function JobsTab() {
   const [jobs, setJobs]       = useState([]);
   const [search, setSearch]   = useState("");
@@ -628,61 +577,66 @@ function JobsTab() {
 
   useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
 
-  const handleForceComplete = async (id) => { await api.post(`/admin/jobs/${id}/force-complete`); load(); };
+  const forceComplete = async (id) => { await api.post(`/admin/jobs/${id}/force-complete`); load(); };
 
   const vLabel = v => ({ TWO_WHEELER: "2-Wheeler", THREE_WHEELER: "3-Wheeler", FOUR_WHEELER: "4-Wheeler", SIX_PLUS_WHEELER: "6W+" }[v] || v);
   const pLabel = p => p?.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, c => c.toUpperCase()) || "—";
 
   return (
     <>
-      <SearchBar value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by user, mechanic or area..." />
-      <FilterPills
-        filters={[
-          { value: "",            label: "All"         },
-          { value: "PENDING",     label: "Pending"     },
-          { value: "IN_PROGRESS", label: "In Progress" },
-          { value: "COMPLETED",   label: "Completed"   },
-          { value: "CANCELLED",   label: "Cancelled"   },
+      <Search value={search} onChange={e => setSearch(e.target.value)} placeholder="Search jobs…" />
+      <Pills
+        options={[
+          { value: "", label: "All" }, { value: "PENDING", label: "Pending" },
+          { value: "IN_PROGRESS", label: "Active" }, { value: "COMPLETED", label: "Completed" },
+          { value: "CANCELLED", label: "Cancelled" },
         ]}
         active={filter} onChange={setFilter}
       />
 
-      {loading ? <Loading /> : !jobs.length ? <EmptyState text="No jobs found" /> :
+      {loading ? <Loader /> : !jobs.length ? <Empty text="No jobs found" /> :
         jobs.map(j => {
           const st = j.status;
           const isActive = ["PENDING", "ACCEPTED", "IN_PROGRESS"].includes(st);
           return (
-            <Card key={j.id} status={st}>
-              <CardBody>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                  <span className="adm-mono" style={{ fontSize: 11, fontWeight: 500, color: C.dim, letterSpacing: "0.05em" }}>
+            <ItemCard key={j.id} status={st}>
+              <div style={{ padding: "13px 14px" }}>
+                {/* Top row: job id + badge */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
+                  <span className="adm-mono" style={{ fontSize: 10, color: "var(--text-3)", letterSpacing: "1.5px" }}>
                     JOB #{j.id}
                   </span>
-                  <Badge status={st} />
+                  <SBadge status={st} />
                 </div>
 
-                <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 4 }}>
+                {/* Problem */}
+                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", marginBottom: 5 }}>
                   {vLabel(j.vehicleType)} · {pLabel(j.problemType)}
                 </div>
 
-                <div style={{ fontSize: 11, color: C.dim, marginBottom: 2 }}>
+                {/* Parties */}
+                <div style={{ fontSize: 11, color: "var(--text-3)" }}>
                   {j.userName || "Unknown"}
-                  {j.mechanicName && <> <span style={{ color: C.dimmer }}>→</span> {j.mechanicName}</>}
-                  {j.broadcastRing && <span style={{ color: C.dimmer }}> · Ring {j.broadcastRing}</span>}
+                  {j.mechanicName && (
+                    <> <span style={{ color: "var(--border)", margin: "0 4px" }}>→</span> {j.mechanicName}</>
+                  )}
                 </div>
-
-                {j.area && <div style={{ fontSize: 10, color: C.dimmer, marginBottom: isActive ? 10 : 0 }}>📍 {j.area}</div>}
-
-                {isActive && (
-                  <BtnRow style={{ marginTop: 10 }}>
-                    {st === "IN_PROGRESS" && (
-                      <Btn label="Force complete" variant="green" small onClick={() => handleForceComplete(j.id)} />
-                    )}
-                    <Btn label="Force cancel" variant="red" small onClick={() => {}} />
-                  </BtnRow>
+                {(j.broadcastRing || j.area) && (
+                  <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 3 }}>
+                    {j.broadcastRing && `Ring ${j.broadcastRing}`}{j.broadcastRing && j.area && " · "}{j.area}
+                  </div>
                 )}
-              </CardBody>
-            </Card>
+              </div>
+
+              {isActive && (
+                <div style={{ padding: "0 14px 13px", display: "flex", gap: 8 }}>
+                  {st === "IN_PROGRESS" && (
+                    <ABtn label="Force Complete" color="green" small onClick={() => forceComplete(j.id)} />
+                  )}
+                  <ABtn label="Force Cancel" color="red" small onClick={() => {}} />
+                </div>
+              )}
+            </ItemCard>
           );
         })
       }
@@ -690,15 +644,16 @@ function JobsTab() {
   );
 }
 
-/* ─────────────────────────────────────────────
-   USERS TAB
-───────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  USERS TAB                                                                  */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
 function UsersTab() {
-  const [users, setUsers]     = useState([]);
-  const [search, setSearch]   = useState("");
-  const [loading, setLoading] = useState(true);
-  const [openTO, setOpenTO]   = useState(null);
-  const [toHours, setToHours] = useState({});
+  const [users, setUsers]       = useState([]);
+  const [search, setSearch]     = useState("");
+  const [loading, setLoading]   = useState(true);
+  const [expanded, setExpanded] = useState(null);
+  const [toHours, setToHours]   = useState({});
 
   const load = useCallback(() => {
     setLoading(true);
@@ -709,131 +664,87 @@ function UsersTab() {
 
   useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
 
-  const handleBan     = async (id) => { await api.post(`/admin/users/${id}/ban`);   load(); };
-  const handleUnban   = async (id) => { await api.post(`/admin/users/${id}/unban`); load(); };
-  const handleDelete  = async (id) => { if (!window.confirm("Delete this user?")) return; await api.delete(`/admin/users/${id}`); load(); };
-  const handleTimeout = async (id) => {
+  const ban     = async (id) => { await api.post(`/admin/users/${id}/ban`);   load(); };
+  const unban   = async (id) => { await api.post(`/admin/users/${id}/unban`); load(); };
+  const del     = async (id) => {
+    if (!window.confirm("Delete this user?")) return;
+    await api.delete(`/admin/users/${id}`); load();
+  };
+  const timeout = async (id) => {
     await api.post(`/admin/users/${id}/timeout`, { hours: parseInt(toHours[id] || "0") });
-    setOpenTO(null); load();
+    setExpanded(null); load();
   };
 
   const isTimedOut = u => u.sosTimeoutUntil && new Date(u.sosTimeoutUntil) > new Date();
-  const userStatus = u => u.isBanned ? "BANNED" : isTimedOut(u) ? "TIMED_OUT" : "ACTIVE";
+  const userSt     = u => u.isBanned ? "BANNED" : isTimedOut(u) ? "TIMED_OUT" : "ACTIVE";
+  const toggle     = id => setExpanded(e => e === id ? null : id);
 
   return (
     <>
-      <SearchBar value={search} onChange={e => setSearch(e.target.value)} placeholder="Search users by name..." />
+      <Search value={search} onChange={e => setSearch(e.target.value)} placeholder="Search users…" />
 
-      {loading ? <Loading /> : !users.length ? <EmptyState text="No users found" /> :
+      {loading ? <Loader /> : !users.length ? <Empty text="No users found" /> :
         users.map(u => {
-          const st      = userStatus(u);
-          const accent  = u.isBanned ? C.red : isTimedOut(u) ? C.yellow : C.green;
-          const initials = (u.name || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-          const light    = [C.yellow, C.green].includes(accent);
+          const st = userSt(u);
+          const isOpen = expanded === u.id;
           return (
-            <div key={u.id} style={{
-              background: C.surface, borderRadius: 16, marginBottom: 12,
-              border: `0.5px solid ${C.border}`, overflow: "hidden",
-            }}>
-              <div style={{ padding: "16px 16px 14px" }}>
-
-                {/* Top row — square avatar + name block + badge */}
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 16 }}>
-                  <div style={{
-                    width: 54, height: 54, borderRadius: 14, background: accent,
-                    flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 20, fontWeight: 800, color: light ? "#141414" : "#fff",
-                    boxShadow: `0 4px 16px ${accent}44`,
-                  }}>{initials}</div>
-
-                  <div style={{ flex: 1, minWidth: 0, paddingTop: 2, textAlign: "left" }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: u.isBanned ? C.dim : C.text, marginBottom: 3, letterSpacing: "-0.2px" }}>
-                      {u.name}
-                    </div>
-                    <div className="adm-mono" style={{ fontSize: 10, color: C.dimmer, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {u.email}
-                    </div>
-                    {isTimedOut(u) && (
-                      <div style={{ fontSize: 10, color: C.yellow, marginTop: 4 }}>
-                        ⏱ timeout until {new Date(u.sosTimeoutUntil).toLocaleString("en-IN", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}
-                      </div>
-                    )}
+            <ItemCard key={u.id} status={st}>
+              {/* Header row */}
+              <div className="adm-row" onClick={() => toggle(u.id)} style={{
+                padding: "13px 14px", display: "flex", alignItems: "center", gap: 12,
+              }}>
+                <Avatar name={u.name} size="sm" variant={u.isBanned ? "red" : "muted"} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: u.isBanned ? "var(--text-3)" : "var(--text)", letterSpacing: "-0.1px" }}>
+                    {u.name}
                   </div>
-
-                  <Badge status={st} />
-                </div>
-
-                {/* Stats row */}
-                <div style={{
-                  display: "flex", gap: 0,
-                  background: C.raised, borderRadius: 12,
-                  border: `0.5px solid ${C.border2}`, marginBottom: 14,
-                  overflow: "hidden",
-                }}>
-                  {[
-                    { label: "SOS sent",   value: u.totalSos ?? 0       },
-                    { label: "Cancels",    value: u.sosCancelCount ?? 0  },
-                  ].map((s, i, arr) => (
-                    <div key={s.label} style={{
-                      flex: 1, padding: "10px 0", textAlign: "center",
-                      borderRight: i < arr.length - 1 ? `0.5px solid ${C.border2}` : "none",
-                    }}>
-                      <div className="adm-mono" style={{ fontSize: 18, fontWeight: 600, color: C.text, lineHeight: 1 }}>{s.value}</div>
-                      <div style={{ fontSize: 10, color: C.dim, marginTop: 4, letterSpacing: "0.02em" }}>{s.label}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {u.email}
+                  </div>
+                  {isTimedOut(u) && (
+                    <div style={{ fontSize: 10, color: "var(--gold)", marginTop: 2 }}>
+                      ⏱ timeout until {new Date(u.sosTimeoutUntil).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                     </div>
-                  ))}
+                  )}
                 </div>
-
-                {/* Action buttons */}
-                {u.isBanned ? (
-                  <BtnRow>
-                    <button className="adm-btn" onClick={() => handleUnban(u.id)} style={{
-                      flex: 1, height: 38, borderRadius: 10, border: "none",
-                      background: C.green, color: "#141414",
-                      fontSize: 12, fontWeight: 700,
-                    }}>Unban</button>
-                    <button className="adm-btn" onClick={() => handleDelete(u.id)} style={{
-                      width: 38, height: 38, borderRadius: 10,
-                      background: "#1a0808", border: `0.5px solid #2a0a0a`,
-                      color: C.red, fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>×</button>
-                  </BtnRow>
-                ) : (
-                  <BtnRow>
-                    <button className="adm-btn" onClick={() => handleBan(u.id)} style={{
-                      flex: 1, height: 38, borderRadius: 10, border: "none",
-                      background: C.red, color: "#fff",
-                      fontSize: 12, fontWeight: 700,
-                    }}>Ban</button>
-                    <button className="adm-btn" onClick={() => setOpenTO(openTO === u.id ? null : u.id)} style={{
-                      flex: 1, height: 38, borderRadius: 10,
-                      background: "#1e1608", border: `0.5px solid #2a1f0a`,
-                      color: C.yellow, fontSize: 12, fontWeight: 600,
-                    }}>Set timeout</button>
-                    <button className="adm-btn" onClick={() => handleDelete(u.id)} style={{
-                      width: 38, height: 38, borderRadius: 10,
-                      background: C.raised, border: `0.5px solid ${C.border2}`,
-                      color: C.dim, fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>×</button>
-                  </BtnRow>
-                )}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  <SBadge status={st} />
+                  <span style={{ color: "var(--text-3)", display: "flex" }}>
+                    <Chevron open={isOpen} />
+                  </span>
+                </div>
               </div>
 
-              {/* Timeout inline form */}
-              <InlineForm open={openTO === u.id}>
-                <div style={{ fontSize: 11, color: C.dim, marginBottom: 7 }}>SOS timeout duration</div>
-                <TinyInput
-                  placeholder="Hours (0 = clear existing timeout)"
-                  type="number"
-                  value={toHours[u.id] || ""}
-                  onChange={e => setToHours(p => ({ ...p, [u.id]: e.target.value }))}
-                />
-                <BtnRow>
-                  <Btn label="Apply timeout" variant="yellow" small onClick={() => handleTimeout(u.id)} />
-                  <Btn label="Cancel"        variant="ghost"  small onClick={() => setOpenTO(null)} />
-                </BtnRow>
-              </InlineForm>
-            </div>
+              {/* Stats strip */}
+              <MiniStats stats={[
+                { label: "SOS Sent", value: u.totalSos ?? 0 },
+                { label: "Cancels",  value: u.sosCancelCount ?? 0, color: u.sosCancelCount > 0 ? "var(--gold)" : "var(--text)" },
+              ]} />
+
+              {/* Expandable actions */}
+              <Slide open={isOpen}>
+                {u.isBanned ? (
+                  <BtnRow>
+                    <ABtn label="Unban" color="green" onClick={() => unban(u.id)} />
+                    <ABtn label="Delete" color="red" onClick={() => del(u.id)} />
+                  </BtnRow>
+                ) : (
+                  <>
+                    <Field
+                      type="number"
+                      placeholder="Timeout hours (0 = clear)"
+                      value={toHours[u.id] || ""}
+                      onChange={e => setToHours(p => ({ ...p, [u.id]: e.target.value }))}
+                    />
+                    <BtnRow>
+                      <ABtn label="Set Timeout" color="gold" onClick={() => timeout(u.id)} />
+                      <ABtn label="Ban"         color="red"  onClick={() => ban(u.id)} />
+                      <ABtn label="Delete" color="ghost" full={false} small onClick={() => del(u.id)} />
+                    </BtnRow>
+                  </>
+                )}
+              </Slide>
+            </ItemCard>
           );
         })
       }
@@ -841,39 +752,42 @@ function UsersTab() {
   );
 }
 
-/* ─────────────────────────────────────────────
-   REASONS TAB
-───────────────────────────────────────────── */
-function ReasonsTab({ reasons, onAdd, onDelete }) {
-  const [newReason, setNewReason] = useState("");
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  REASONS TAB                                                                */
+/* ═══════════════════════════════════════════════════════════════════════════ */
 
-  const handleAdd = async () => {
-    const trimmed = newReason.trim();
-    if (!trimmed) return;
-    await onAdd(trimmed);
-    setNewReason("");
+function ReasonsTab({ reasons, onAdd, onDelete }) {
+  const [val, setVal] = useState("");
+
+  const add = () => {
+    const t = val.trim();
+    if (!t) return;
+    onAdd(t);
+    setVal("");
   };
 
   return (
     <>
-      <SectionLabel>Rejection Reasons</SectionLabel>
+      <SectionHead>Rejection Reasons</SectionHead>
 
-      <div style={{ background: C.surface, borderRadius: 12, border: `0.5px solid ${C.border}`, marginBottom: 14, overflow: "hidden" }}>
-        {!reasons.length ? (
-          <EmptyState text="No reasons configured yet" />
-        ) : reasons.map((r, i) => (
+      <div style={{
+        background: "var(--surface)", border: "1px solid var(--border)",
+        borderRadius: 14, overflow: "hidden", marginBottom: 12,
+      }}>
+        {!reasons.length ? <Empty text="No reasons yet" /> : reasons.map((r, i) => (
           <div key={r.id} style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
             padding: "12px 14px",
-            borderBottom: i < reasons.length - 1 ? `0.5px solid #1c1c1c` : "none",
+            borderBottom: i < reasons.length - 1 ? "1px solid var(--border)" : "none",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 5, height: 5, borderRadius: "50%", background: C.red, opacity: 0.6, flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: "#bbb" }}>{r.reason}</span>
+              <div style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--red)", flexShrink: 0 }} />
+              <span style={{ fontSize: 13, color: "var(--text-2)" }}>{r.reason}</span>
             </div>
             <button className="adm-btn" onClick={() => onDelete(r.id)} style={{
-              width: 28, height: 28, borderRadius: 8, background: "#1a0808",
-              border: `0.5px solid #2a0a0a`, color: C.red, fontSize: 16,
+              width: 26, height: 26, borderRadius: 8,
+              background: "rgba(230,57,70,0.08)", border: "1px solid rgba(230,57,70,0.20)",
+              color: "var(--red)", fontSize: 14,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>×</button>
           </div>
@@ -881,39 +795,38 @@ function ReasonsTab({ reasons, onAdd, onDelete }) {
       </div>
 
       <div style={{ display: "flex", gap: 8 }}>
-        <input
-          placeholder="Add new rejection reason..."
-          value={newReason}
-          onChange={e => setNewReason(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && handleAdd()}
+        <input className="adm-in" placeholder="New rejection reason…" value={val}
+          onChange={e => setVal(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && add()}
           style={{
-            flex: 1, height: 40, borderRadius: 10, background: C.surface,
-            border: `0.5px solid ${C.border2}`, color: C.text,
-            fontSize: 12, padding: "0 12px", outline: "none",
+            flex: 1, height: 42, borderRadius: 12,
+            background: "var(--surface)", border: "1px solid var(--border)",
+            color: "var(--text)", fontSize: 13, padding: "0 12px",
           }}
         />
-        <button className="adm-btn" onClick={handleAdd} style={{
-          height: 40, padding: "0 16px", borderRadius: 10,
-          background: C.red, border: "none", color: "#fff",
-          fontSize: 12, fontWeight: 600,
+        <button className="adm-btn" onClick={add} style={{
+          height: 42, padding: "0 18px", borderRadius: 12,
+          background: "var(--red)", border: "none",
+          color: "var(--text)", fontSize: 13, fontWeight: 600,
         }}>Add</button>
       </div>
     </>
   );
 }
 
-/* ─────────────────────────────────────────────
-   MAIN PAGE
-───────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  MAIN PAGE                                                                  */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
 export default function AdminDashboardPage() {
   const { logout } = useAuth();
   const navigate   = useNavigate();
 
-  const [activeTab, setActiveTab]       = useState("overview");
-  const [rejectionReasons, setReasons]  = useState([]);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [stats, setStats]               = useState({
-    activeJobs: null, onlineMechanics: null, pendingVerify: null, pendingReports: 0, recentActivity: []
+  const [tab, setTab]       = useState("overview");
+  const [reasons, setReasons] = useState([]);
+  const [pending, setPending] = useState(0);
+  const [stats, setStats]   = useState({
+    activeJobs: null, onlineMechanics: null, pendingVerify: null, pendingReports: 0, recentActivity: [],
   });
 
   useEffect(() => { injectStyles(); }, []);
@@ -927,27 +840,26 @@ export default function AdminDashboardPage() {
       api.get("/admin/jobs?status=IN_PROGRESS").catch(() => ({ data: [] })),
       api.get("/admin/mechanics?status=VERIFIED").catch(() => ({ data: [] })),
       api.get("/admin/mechanics/pending").catch(() => ({ data: [] })),
-    ]).then(([jobs, mechs, pending]) => {
-      const pendingVerify = pending.data.length;
-      setPendingCount(pendingVerify);
+    ]).then(([jobs, mechs, pend]) => {
+      const pv = pend.data.length;
+      setPending(pv);
       setStats(s => ({
         ...s,
         activeJobs:      jobs.data.length,
         onlineMechanics: mechs.data.filter(m => m.isAvailable).length,
-        pendingVerify,
+        pendingVerify:   pv,
       }));
     });
   }, []);
 
   useEffect(() => { loadReasons(); loadStats(); }, [loadReasons, loadStats]);
 
-  const handleLogout       = () => { logout(); navigate("/login"); };
-  const handleAddReason    = async (reason) => { await api.post("/admin/rejection-reasons", { reason }); loadReasons(); };
-  const handleDeleteReason = async (id)     => { await api.delete(`/admin/rejection-reasons/${id}`); loadReasons(); };
+  const addReason = async (r) => { await api.post("/admin/rejection-reasons", { reason: r }); loadReasons(); };
+  const delReason = async (id) => { await api.delete(`/admin/rejection-reasons/${id}`); loadReasons(); };
 
   const TABS = [
     { id: "overview",  label: "Overview"  },
-    { id: "verify",    label: "Verify",   badge: pendingCount },
+    { id: "verify",    label: "Verify",    badge: pending },
     { id: "mechanics", label: "Mechanics" },
     { id: "jobs",      label: "Jobs"      },
     { id: "users",     label: "Users"     },
@@ -955,68 +867,66 @@ export default function AdminDashboardPage() {
   ];
 
   return (
-    <div className="adm-root" style={{ maxWidth: 480, margin: "0 auto" }}>
+    <div className="adm">
+      {/* Iron Man signature — 2px red line at absolute top */}
+      <div style={{ height: 2, background: "var(--red)", position: "sticky", top: 0, zIndex: 100 }} />
 
-      {/* ── Topbar ── */}
-      <div style={{
-        background: C.bg, padding: "13px 16px 11px",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        borderBottom: `0.5px solid ${C.border}`,
-        position: "sticky", top: 0, zIndex: 20,
-      }}>
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 18, fontWeight: 800, color: C.red, letterSpacing: "-0.5px" }}>PitStop</span>
-            <span style={{
-              background: "#1c0608", border: `0.5px solid #3a0a0e`,
-              borderRadius: 20, padding: "2px 9px", fontSize: 9,
-              color: C.red, letterSpacing: "0.1em", fontWeight: 700,
-            }}>ADMIN</span>
-          </div>
-          <div style={{ fontSize: 10, color: C.dim, marginTop: 1, letterSpacing: "0.04em" }}>Admin Dashboard</div>
+      <div style={{ maxWidth: 480, margin: "0 auto" }}>
+
+        {/* TopBar */}
+        <div style={{ padding: "16px 16px 0" }}>
+          <TopBar
+            centerContent={<Badge variant="red">ADMIN</Badge>}
+            rightContent={
+              <button className="adm-btn" onClick={() => { logout(); navigate("/login"); }} style={{
+                height: 32, padding: "0 14px", borderRadius: 9,
+                background: "transparent", border: "1px solid var(--border)",
+                color: "var(--text-3)", fontSize: 12,
+              }}>Logout</button>
+            }
+          />
         </div>
-        <button className="adm-btn" onClick={handleLogout} style={{
-          background: "transparent", border: `0.5px solid ${C.border2}`,
-          color: C.dim, borderRadius: 8, padding: "5px 12px", fontSize: 11,
-        }}>Logout</button>
-      </div>
 
-      {/* ── Tab nav ── */}
-      <div style={{
-        display: "flex", borderBottom: `0.5px solid ${C.border}`,
-        background: C.bg, overflowX: "auto",
-        position: "sticky", top: 46, zIndex: 19,
-      }}>
-        {TABS.map(t => (
-          <div key={t.id} className="adm-tab-item" onClick={() => setActiveTab(t.id)} style={{
-            padding: "10px 13px", fontSize: 11, cursor: "pointer",
-            whiteSpace: "nowrap", flexShrink: 0,
-            borderBottom: activeTab === t.id ? `2px solid ${C.red}` : "2px solid transparent",
-            color: activeTab === t.id ? C.red : C.dim,
-            fontWeight: activeTab === t.id ? 600 : 400,
-          }}>
-            {t.label}
-            {t.badge > 0 && (
-              <span style={{
-                display: "inline-flex", alignItems: "center", justifyContent: "center",
-                background: C.red, color: "#fff", borderRadius: "50%",
-                width: 16, height: 16, fontSize: 9, fontWeight: 700,
-                marginLeft: 5, verticalAlign: "middle",
-                boxShadow: `0 0 8px ${C.red}99`,
-              }}>{t.badge}</span>
-            )}
-          </div>
-        ))}
-      </div>
+        {/* Tab strip */}
+        <div className="adm-tabs" style={{
+          display: "flex", overflowX: "auto",
+          borderBottom: "1px solid var(--border)",
+          background: "var(--bg)",
+          position: "sticky", top: 2, zIndex: 20,
+          paddingLeft: 16,
+          marginTop: 12,
+        }}>
+          {TABS.map(t => (
+            <button key={t.id} className="adm-tab adm-btn" onClick={() => setTab(t.id)} style={{
+              height: 46, padding: "0 16px", flexShrink: 0, background: "transparent",
+              border: "none",
+              borderBottom: tab === t.id ? "2px solid var(--red)" : "2px solid transparent",
+              color: tab === t.id ? "var(--red)" : "var(--text-3)",
+              fontSize: 12, fontWeight: tab === t.id ? 600 : 400,
+              display: "flex", alignItems: "center", gap: 6,
+            }}>
+              {t.label}
+              {t.badge > 0 && (
+                <span style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  background: "var(--red)", color: "var(--text)", borderRadius: "50%",
+                  width: 18, height: 18, fontSize: 10, fontWeight: 700,
+                  boxShadow: "0 0 8px rgba(230,57,70,0.5)",
+                }}>{t.badge}</span>
+              )}
+            </button>
+          ))}
+        </div>
 
-      {/* ── Tab body ── */}
-      <div style={{ padding: 14 }}>
-        {activeTab === "overview"  && <OverviewTab stats={stats} />}
-        {activeTab === "verify"    && <VerifyTab rejectionReasons={rejectionReasons} onAction={loadStats} />}
-        {activeTab === "mechanics" && <MechanicsTab />}
-        {activeTab === "jobs"      && <JobsTab />}
-        {activeTab === "users"     && <UsersTab />}
-        {activeTab === "reasons"   && <ReasonsTab reasons={rejectionReasons} onAdd={handleAddReason} onDelete={handleDeleteReason} />}
+        {/* Content */}
+        <div style={{ padding: "20px 16px 32px" }}>
+          {tab === "overview"  && <OverviewTab stats={stats} />}
+          {tab === "verify"    && <VerifyTab rejectionReasons={reasons} onAction={loadStats} />}
+          {tab === "mechanics" && <MechanicsTab />}
+          {tab === "jobs"      && <JobsTab />}
+          {tab === "users"     && <UsersTab />}
+          {tab === "reasons"   && <ReasonsTab reasons={reasons} onAdd={addReason} onDelete={delReason} />}
+        </div>
       </div>
     </div>
   );

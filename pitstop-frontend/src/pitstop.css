@@ -10,11 +10,11 @@
 
 /* ── DESIGN TOKENS ─────────────────────────────────────────── */
 :root {
-  /* Backgrounds — layered depth system */
-  --bg:        #0A0A0F;
-  --surface:   #111118;
-  --surface2:  #1A1A24;
-  --surface3:  #22222F;
+  /* Backgrounds — gunmetal steel depth system */
+  --bg:        #0C0E16;
+  --surface:   #12141F;
+  --surface2:  #191B2A;
+  --surface3:  #212336;
 
   /* Brand — Iron Man palette */
   --red:        #E63946;
@@ -32,6 +32,10 @@
   --green:        #4ADE80;
   --green-soft:   rgba(74, 222, 128, 0.10);
   --green-border: rgba(74, 222, 128, 0.25);
+
+  --blue:        #6AB0F5;
+  --blue-soft:   rgba(106, 176, 245, 0.10);
+  --blue-border: rgba(106, 176, 245, 0.28);
 
   /* Borders */
   --border:    #2A2A3A;
@@ -256,12 +260,10 @@ body {
   flex-shrink: 0;
 }
 .ps-topbar-center {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-2);
-  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   flex: 1;
-  letter-spacing: 0.2px;
 }
 .ps-topbar-right {
   display: flex;
@@ -473,10 +475,11 @@ body {
 .ps-tag {
   display: inline-flex;
   align-items: center;
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  padding: 3px 8px;
+  line-height: 1;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  padding: 8px 16px;
   border-radius: 20px;
   text-transform: uppercase;
   white-space: nowrap;
@@ -491,10 +494,11 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  padding: 3px 8px;
+  line-height: 1;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  padding: 8px 16px;
   border-radius: 20px;
   text-transform: uppercase;
   color: var(--red);
@@ -615,6 +619,13 @@ body {
   border-radius: 10px;
   font-weight: 800;
   letter-spacing: -0.5px;
+}.ps-avatar-gold  {
+  background: var(--gold-soft);
+  color: var(--gold);
+  border: 1.5px solid var(--gold-border);
+  border-radius: 10px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
 }.ps-avatar-muted { background: var(--surface3);       color: var(--text-2);border: 1px solid var(--border); }
 
 /* ── SOS PULSE RING ─────────────────────────────────────────── */
@@ -633,6 +644,11 @@ body {
 }
 .ps-pulse-ring:nth-child(2) { animation-delay: 0.7s; }
 .ps-pulse-ring:nth-child(3) { animation-delay: 1.4s; }
+@keyframes psGoldPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(255,183,0,0.6); }
+  50%       { opacity: 0.4; box-shadow: 0 0 4px rgba(255,183,0,0.2); }
+}
+
 @keyframes ps-pulse {
   0%   { opacity: 0.8; transform: scale(1); }
   100% { opacity: 0;   transform: scale(2.2); }
@@ -850,6 +866,14 @@ body {
   letter-spacing: 1px;
   margin-bottom: 10px;
 }
+
+/* ── SCROLLBAR ──────────────────────────────────────────────── */
+/* Hide scrollbar visually while keeping scroll behaviour */
+.ps-scroll-hide {
+  scrollbar-width: none;       /* Firefox */
+  -ms-overflow-style: none;    /* IE / old Edge */
+}
+.ps-scroll-hide::-webkit-scrollbar { display: none; } /* Chrome / Safari / Edge */
 
 /* ── UTILITY ────────────────────────────────────────────────── */
 .ps-spacer-xs { height: 8px; }

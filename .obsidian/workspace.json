@@ -11,10 +11,14 @@
             "id": "56c69a23c89b3bc6",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "Iron Man Reference MockUp.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "New tab"
+              "title": "Iron Man Reference MockUp"
             }
           }
         ]
@@ -177,8 +181,16 @@
       "bases:Create new base": false
     }
   },
-  "active": "59e7f6b444f7422e",
+  "active": "56c69a23c89b3bc6",
   "lastOpenFiles": [
-    "Untitled.md"
+    "Spec.md",
+    "Iron Man Reference MockUp.md",
+    "Today.md",
+    "Done.md",
+    "Stack.md",
+    "Claude.md",
+    "Claude.md.md",
+    "README.md",
+    "claude.md"
   ]
 }

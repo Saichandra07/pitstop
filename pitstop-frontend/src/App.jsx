@@ -13,6 +13,8 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
 import SOSWizardPage from './pages/SOSWizardPage';
+import ProfilePage from './pages/ProfilePage';
+import MechanicHistoryPage from './pages/MechanicHistoryPage';
 
 
 function RootRedirect() {
@@ -46,6 +48,12 @@ function App() {
           </ProtectedRoute>
         } />
 
+        <Route path="/profile" element={
+          <ProtectedRoute allowedRoles={['USER']}>
+            <ProfilePage />
+          </ProtectedRoute>
+        } />
+
         <Route path="/sos" element={
           <ProtectedRoute allowedRoles={['USER']}>
             <SOSWizardPage />
@@ -56,6 +64,18 @@ function App() {
         <Route path="/mechanic/dashboard" element={
           <ProtectedRoute allowedRoles={['MECHANIC']}>
             <MechanicDashboardPage />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/mechanic/profile" element={
+          <ProtectedRoute allowedRoles={['MECHANIC']}>
+            <ProfilePage />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/mechanic/history" element={
+          <ProtectedRoute allowedRoles={['MECHANIC']}>
+            <MechanicHistoryPage />
           </ProtectedRoute>
         } />
 

@@ -23,6 +23,8 @@ public class JobService {
     private final MechanicExpertiseRepository mechanicExpertiseRepository;
     @Autowired
     private AccountRepository accountRepository;
+    @Autowired
+    private BroadcastService broadcastService;
 
     public JobService(JobRepository jobRepository,
                       MechanicProfileRepository mechanicProfileRepository,
@@ -43,14 +45,16 @@ public class JobService {
                 job.getStatus(),
                 job.getVehicleType(),
                 job.getProblemType(),
-                job.getVehicleName(),      // new
-                job.getPhotoUrl(),         // new
+                job.getVehicleName(),
+                job.getPhotoUrl(),
                 job.getAddress(),
                 job.getDescription(),
                 job.getLatitude(),
                 job.getLongitude(),
                 job.getCreatedAt(),
-                job.getUpdatedAt()
+                job.getUpdatedAt(),
+                job.getBroadcastRing(),
+                job.getCancellationReason()
         );
     }
 
@@ -81,9 +85,12 @@ public class JobService {
         job.setAddress(dto.getAddress());
         job.setPhotoUrl(dto.getPhotoUrl());
         job.setStatus(JobStatus.PENDING);
-        job.setBroadcastRing(1);                               // new — start at ring 1
-        job.setBroadcastStartedAt(java.time.LocalDateTime.now()); // new — scheduler needs this
-        return toDto(jobRepository.save(job));  // add this line
+        job.setBroadcastRing(1);
+        job.setBroadcastStartedAt(java.time.LocalDateTime.now());
+        Job saved = jobRepository.save(job);
+        // Fire ring 1 broadcast immediately — scheduler only handles ring advancement
+        broadcastService.broadcastToRing(saved);
+        return toDto(saved);
     }
 
     // ── Read ───────────────────────────────────────────────────────────────────
@@ -159,9 +166,9 @@ public class JobService {
                 .stream().map(this::toDto).collect(Collectors.toList());
     }
 
-    // Issue #10 — user history: completed + cancelled
+    // Issue #10 — user history: completed + cancelled, newest first
     public List<JobResponseDto> getJobHistory(Long accountId) {
-        return jobRepository.findByAccountIdAndStatusIn(
+        return jobRepository.findByAccountIdAndStatusInOrderByCreatedAtDesc(
                         accountId,
                         List.of(JobStatus.COMPLETED, JobStatus.CANCELLED))
                 .stream().map(this::toDto).collect(Collectors.toList());
@@ -191,6 +198,15 @@ public class JobService {
 
     public List<JobResponseDto> getJobsByMechanic(Long mechanicProfileId) {
         return jobRepository.findByMechanicProfileId(mechanicProfileId)
+                .stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    // Mechanic's own completed job history, newest first
+    public List<JobResponseDto> getMechanicJobHistory(Long accountId) {
+        MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No mechanic profile found"));
+        return jobRepository.findByMechanicProfileIdAndStatusInOrderByCreatedAtDesc(
+                        profile.getId(), List.of(JobStatus.COMPLETED))
                 .stream().map(this::toDto).collect(Collectors.toList());
     }
 
@@ -263,6 +279,7 @@ public class JobService {
                     "Job is already " + job.getStatus());
         }
 
+        job.setCancellationReason(CancellationReason.USER_CANCELLED);
         job.setStatus(JobStatus.CANCELLED);
         return toDto(jobRepository.save(job));
     }

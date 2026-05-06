@@ -1,5 +1,6 @@
 package com.pitstop.pitstop_backend.job.dto;
 
+import com.pitstop.pitstop_backend.job.CancellationReason;
 import com.pitstop.pitstop_backend.job.JobStatus;
 import com.pitstop.pitstop_backend.job.ProblemType;
 import com.pitstop.pitstop_backend.job.VehicleType;
@@ -21,12 +22,15 @@ public class JobResponseDto {
     private Double longitude;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Integer broadcastRing;
+    private CancellationReason cancellationReason;
 
     public JobResponseDto(Long id, Long accountId, Long mechanicProfileId,
                           JobStatus status, VehicleType vehicleType, ProblemType problemType,
                           String vehicleName, String photoUrl,
                           String address, String description, Double latitude, Double longitude,
-                          LocalDateTime createdAt, LocalDateTime updatedAt) {
+                          LocalDateTime createdAt, LocalDateTime updatedAt, Integer broadcastRing,
+                          CancellationReason cancellationReason) {
         this.id = id;
         this.accountId = accountId;
         this.mechanicProfileId = mechanicProfileId;
@@ -41,6 +45,8 @@ public class JobResponseDto {
         this.longitude = longitude;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+        this.broadcastRing = broadcastRing;
+        this.cancellationReason = cancellationReason;
     }
 
     public Long getId() { return id; }
@@ -57,4 +63,6 @@ public class JobResponseDto {
     public Double getLongitude() { return longitude; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public Integer getBroadcastRing() { return broadcastRing; }
+    public CancellationReason getCancellationReason() { return cancellationReason; }
 }

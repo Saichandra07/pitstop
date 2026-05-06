@@ -1,6 +1,7 @@
 package com.pitstop.pitstop_backend.job;
 
 import com.pitstop.pitstop_backend.job.dto.AdminJobResponse;
+import com.pitstop.pitstop_backend.job.dto.BroadcastJobResponse;
 import com.pitstop.pitstop_backend.job.dto.JobResponseDto;
 import com.pitstop.pitstop_backend.job.dto.SosRequestDto;
 import jakarta.validation.Valid;
@@ -21,10 +22,13 @@ public class JobController {
 
     private final JobService jobService;
     private final CloudinaryService cloudinaryService;
+    private final BroadcastService broadcastService;
 
-    public JobController(JobService jobService, CloudinaryService cloudinaryService) {
+    public JobController(JobService jobService, CloudinaryService cloudinaryService,
+                         BroadcastService broadcastService) {
         this.jobService = jobService;
         this.cloudinaryService = cloudinaryService;
+        this.broadcastService = broadcastService;
     }
 
     // POST /api/jobs/sos — USER only (SecurityConfig)
@@ -74,6 +78,12 @@ public class JobController {
     @GetMapping("/pending")
     public ResponseEntity<List<JobResponseDto>> getPendingJobs() {
         return ResponseEntity.ok(jobService.getPendingJobs(getAccountId()));
+    }
+
+    // GET /api/jobs/mechanic/history — MECHANIC: their completed job history
+    @GetMapping("/mechanic/history")
+    public ResponseEntity<List<JobResponseDto>> getMechanicJobHistory() {
+        return ResponseEntity.ok(jobService.getMechanicJobHistory(getAccountId()));
     }
 
     // GET /api/jobs/mechanic/active — MECHANIC: their current active job
@@ -130,6 +140,28 @@ public class JobController {
     public ResponseEntity<Void> forceComplete(@PathVariable Long id) {
         jobService.adminForceComplete(id);
         return ResponseEntity.ok().build();
+    }
+
+    // POST /api/jobs/{id}/accept — MECHANIC accepts a broadcast job
+    @PostMapping("/{id}/accept")
+    public ResponseEntity<Void> acceptJob(@PathVariable Long id) {
+        broadcastService.handleAccept(id, getAccountId());
+        return ResponseEntity.noContent().build();
+    }
+
+    // POST /api/jobs/{id}/decline — MECHANIC declines a broadcast job
+    @PostMapping("/{id}/decline")
+    public ResponseEntity<Void> declineJob(@PathVariable Long id) {
+        broadcastService.handleDecline(id, getAccountId());
+        return ResponseEntity.noContent().build();
+    }
+
+    // GET /api/jobs/broadcast/pending — MECHANIC polls for their pending broadcast
+    @GetMapping("/broadcast/pending")
+    public ResponseEntity<BroadcastJobResponse> getPendingBroadcast() {
+        return broadcastService.getPendingBroadcast(getAccountId())
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
     }
 
     // JWT helper

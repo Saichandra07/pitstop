@@ -56,7 +56,14 @@ public class SecurityConfig {
                         // ── MECHANIC only ───────────────────────────────────────────
                         // Broadcast feed — see all PENDING jobs
                         .requestMatchers(HttpMethod.GET, "/api/jobs/pending").hasRole("MECHANIC")
-                        // Accept a job
+                        // Broadcast polling — get the job currently sent to this mechanic
+                        .requestMatchers(HttpMethod.GET, "/api/jobs/broadcast/pending").hasRole("MECHANIC")
+                        // Mechanic's own completed job history
+                        .requestMatchers(HttpMethod.GET, "/api/jobs/mechanic/history").hasRole("MECHANIC")
+                        // Accept / decline a broadcast job
+                        .requestMatchers(HttpMethod.POST, "/api/jobs/*/accept").hasRole("MECHANIC")
+                        .requestMatchers(HttpMethod.POST, "/api/jobs/*/decline").hasRole("MECHANIC")
+                        // Accept a job (legacy assign endpoint)
                         .requestMatchers(HttpMethod.POST, "/api/jobs/*/assign").hasRole("MECHANIC")
                         // Push job status forward (IN_PROGRESS, COMPLETED)
                         .requestMatchers(HttpMethod.PATCH, "/api/jobs/*/status").hasRole("MECHANIC")

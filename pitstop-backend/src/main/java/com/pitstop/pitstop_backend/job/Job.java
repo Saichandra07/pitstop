@@ -44,6 +44,10 @@ public class Job {
     @Column(nullable = true)
     private LocalDateTime broadcastStartedAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = true)
+    private CancellationReason cancellationReason;
+
     private String address;
     private String description;
 
@@ -119,4 +123,7 @@ public class Job {
 
     public String getArea() { return area; }
     public void setArea(String area) { this.area = area; }
+
+    public CancellationReason getCancellationReason() { return cancellationReason; }
+    public void setCancellationReason(CancellationReason cancellationReason) { this.cancellationReason = cancellationReason; }
 }

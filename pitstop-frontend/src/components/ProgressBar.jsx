@@ -1,38 +1,22 @@
 // src/components/ProgressBar.jsx
 export default function ProgressBar({ steps, current }) {
+  const pct = Math.round((current / steps) * 100);
   return (
     <div style={{
-      display: 'flex',
-      gap: '4px',
-      height: '3px',
+      height: 3,
+      background: 'var(--surface3)',
+      borderRadius: 4,
+      overflow: 'hidden',
+      marginTop: 4,
+      marginBottom: 16,
     }}>
-      {Array.from({ length: steps }, (_, i) => {
-        const stepNum = i + 1;
-        let background;
-
-        if (stepNum < current) {
-          // Done
-          background = 'var(--green)';
-        } else if (stepNum === current) {
-          // Active
-          background = 'linear-gradient(90deg, var(--red), var(--gold))';
-        } else {
-          // Upcoming
-          background = 'var(--surface3)';
-        }
-
-        return (
-          <div
-            key={i}
-            style={{
-              flex: 1,
-              height: '100%',
-              borderRadius: '4px',
-              background,
-            }}
-          />
-        );
-      })}
+      <div style={{
+        width: `${pct}%`,
+        height: '100%',
+        background: 'linear-gradient(90deg, var(--red), var(--gold))',
+        borderRadius: 4,
+        transition: 'width 0.3s ease',
+      }} />
     </div>
   );
 }

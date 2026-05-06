@@ -1,9 +1,11 @@
 package com.pitstop.pitstop_backend.account;
 
 import com.pitstop.pitstop_backend.account.dto.*;
+import com.pitstop.pitstop_backend.account.dto.AvailabilityRequest;
 import com.pitstop.pitstop_backend.auth.JwtUtil;
 import com.pitstop.pitstop_backend.common.dto.LoginResponse;
 import com.pitstop.pitstop_backend.exception.ResourceNotFoundException;
+import com.pitstop.pitstop_backend.job.BroadcastService;
 import com.pitstop.pitstop_backend.job.JobRepository;
 import com.pitstop.pitstop_backend.job.JobStatus;
 import com.pitstop.pitstop_backend.job.ProblemType;
@@ -32,6 +34,9 @@ public class AccountService {
     private final EmailVerificationTokenRepository emailVerificationTokenRepository;
     private final EmailService emailService;
     private final JobRepository jobRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private BroadcastService broadcastService;
 
     public AccountService(
             AccountRepository accountRepository,
@@ -142,9 +147,8 @@ public class AccountService {
 
     }
 
-    // Issue #5 — mechanic toggles their own availability
-    // Only VERIFIED mechanics can go online — unverified ones stay blocked
-    public void toggleAvailability(Long accountId) {
+    // Mechanic toggles availability. Lat/lng required when going online — stored for broadcast ring queries.
+    public void toggleAvailability(Long accountId, AvailabilityRequest request) {
         MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "No mechanic profile found"));
@@ -154,8 +158,9 @@ public class AccountService {
                     "Only verified mechanics can change availability");
         }
 
-        // Block going offline during an active job
-        if (profile.getIsAvailable()) {
+        boolean goingOnline = Boolean.TRUE.equals(request.isAvailable());
+
+        if (!goingOnline) {
             boolean hasActiveJob = jobRepository.existsByMechanicProfileIdAndStatusIn(
                     profile.getId(),
                     List.of(JobStatus.ACCEPTED, JobStatus.IN_PROGRESS)
@@ -164,10 +169,23 @@ public class AccountService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Cannot go offline during an active job");
             }
+            profile.setLatitude(null);
+            profile.setLongitude(null);
+        } else {
+            if (request.latitude() == null || request.longitude() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Location is required to go online");
+            }
+            profile.setLatitude(request.latitude());
+            profile.setLongitude(request.longitude());
         }
 
-        profile.setIsAvailable(!profile.getIsAvailable());
+        profile.setIsAvailable(goingOnline);
         mechanicProfileRepository.save(profile);
+
+        if (goingOnline) {
+            broadcastService.notifyNewlyOnlineMechanic(profile);
+        }
     }
 
     public LoginResponse setupAdmin(AdminSetupRequest request) {
@@ -473,6 +491,15 @@ public class AccountService {
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         accountRepository.delete(account);
+    }
+
+    public void updateName(Long accountId, String name) {
+        if (name == null || name.isBlank())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name cannot be blank");
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+        account.setName(name.trim());
+        accountRepository.save(account);
     }
 
 }

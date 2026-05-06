@@ -2,6 +2,7 @@ package com.pitstop.pitstop_backend.account;
 
 
 import com.pitstop.pitstop_backend.account.dto.*;
+import com.pitstop.pitstop_backend.account.dto.AvailabilityRequest;
 import com.pitstop.pitstop_backend.auth.JwtUtil;
 import com.pitstop.pitstop_backend.common.dto.LoginResponse;
 import jakarta.validation.Valid;
@@ -51,10 +52,10 @@ public class AccountController {
     }
 
     // PATCH /api/accounts/availability — MECHANIC only (SecurityConfig)
-    // Flips isAvailable true↔false. VERIFIED check is in service layer.
+    // Sets availability explicitly. Lat/lng required when going online — stored for broadcast.
     @PatchMapping("/accounts/availability")
-    public ResponseEntity<Void> toggleAvailability() {
-        accountService.toggleAvailability(getAccountId());
+    public ResponseEntity<Void> toggleAvailability(@RequestBody AvailabilityRequest request) {
+        accountService.toggleAvailability(getAccountId(), request);
         return ResponseEntity.noContent().build();
     }
 
@@ -207,6 +208,12 @@ public class AccountController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
         accountService.adminDeleteUser(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/accounts/name")
+    public ResponseEntity<Void> updateName(@RequestBody Map<String, String> body) {
+        accountService.updateName(getAccountId(), body.get("name"));
         return ResponseEntity.noContent().build();
     }
 

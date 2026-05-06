@@ -1,24 +1,28 @@
-# Compiled class file
-*.class
+# Planning & session files (local only)
+CLAUDE.md
+Spec.md
+Done.md
+Stack.md
+Today.md
+Iron Man Reference MockUp.md
+learning-docs/
 
-# Log file
-*.log
+# IDE
+.idea/
+.obsidian/
+*.iml
 
-# BlueJ files
-*.ctxt
+# Frontend
+pitstop-frontend/node_modules/
+pitstop-frontend/dist/
+pitstop-frontend/.env
+pitstop-frontend/.env.local
 
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
+# Backend
+pitstop-backend/target/
+pitstop-backend/.env
+pitstop-backend/src/main/resources/application.properties
 
-# Package Files #
-*.jar
-*.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
-
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-replay_pid*
+# OS
+.DS_Store
+Thumbs.db
