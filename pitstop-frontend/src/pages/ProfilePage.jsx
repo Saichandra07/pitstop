@@ -74,6 +74,7 @@ export default function ProfilePage() {
 
   const [profile, setProfile]     = useState(null);
   const [history, setHistory]     = useState([]);
+  const [activeJob, setActiveJob] = useState(null);
   const [loading, setLoading]     = useState(true);
   const [editing, setEditing]     = useState(false);
   const [nameInput, setNameInput] = useState("");
@@ -88,7 +89,12 @@ export default function ProfilePage() {
         setProfile(meRes.data);
         setNameInput(meRes.data.name || "");
 
-        if (!isMechanic) {
+        if (isMechanic) {
+          try {
+            const activeRes = await api.get("/jobs/mechanic/active");
+            setActiveJob(activeRes.data || null);
+          } catch { /* 204 No Content throws in axios — means no active job */ }
+        } else {
           const histRes = await api.get("/jobs/my/history");
           setHistory(histRes.data || []);
         }
@@ -153,9 +159,11 @@ export default function ProfilePage() {
     { value: cancelledCount, label: "Cancelled"  },
   ];
 
+  const nowLabel = activeJob ? "On Job" : (profile?.isAvailable ? "Online" : "Offline");
+
   const mechStats = [
     { value: profile?.verificationStatus || "—", label: "Status" },
-    { value: profile?.isAvailable ? "Online" : "Offline", label: "Now" },
+    { value: nowLabel, label: "Now" },
   ];
 
   return (

@@ -21,6 +21,7 @@ public class JobService {
     private final JobRepository jobRepository;
     private final MechanicProfileRepository mechanicProfileRepository;
     private final MechanicExpertiseRepository mechanicExpertiseRepository;
+    private final JobBroadcastRepository jobBroadcastRepository;
     @Autowired
     private AccountRepository accountRepository;
     @Autowired
@@ -28,11 +29,12 @@ public class JobService {
 
     public JobService(JobRepository jobRepository,
                       MechanicProfileRepository mechanicProfileRepository,
-                      MechanicExpertiseRepository mechanicExpertiseRepository
-                      ) {
+                      MechanicExpertiseRepository mechanicExpertiseRepository,
+                      JobBroadcastRepository jobBroadcastRepository) {
         this.jobRepository = jobRepository;
         this.mechanicProfileRepository = mechanicProfileRepository;
         this.mechanicExpertiseRepository = mechanicExpertiseRepository;
+        this.jobBroadcastRepository = jobBroadcastRepository;
     }
 
     // ── Mapping ────────────────────────────────────────────────────────────────
@@ -192,6 +194,10 @@ public class JobService {
                                 job.getVehicleType(),
                                 job.getProblemType()
                         ))
+                // Exclude jobs this mechanic has already received a broadcast for (including abandoned ones).
+                .filter(job -> !jobBroadcastRepository.existsByJobIdAndMechanicProfileId(
+                        job.getId(), profile.getId()
+                ))
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }

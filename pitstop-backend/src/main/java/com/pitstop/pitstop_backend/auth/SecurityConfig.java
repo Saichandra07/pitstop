@@ -63,6 +63,7 @@ public class SecurityConfig {
                         // Accept / decline a broadcast job
                         .requestMatchers(HttpMethod.POST, "/api/jobs/*/accept").hasRole("MECHANIC")
                         .requestMatchers(HttpMethod.POST, "/api/jobs/*/decline").hasRole("MECHANIC")
+                        .requestMatchers(HttpMethod.POST, "/api/jobs/*/mechanic-abandon").hasRole("MECHANIC")
                         // Accept a job (legacy assign endpoint)
                         .requestMatchers(HttpMethod.POST, "/api/jobs/*/assign").hasRole("MECHANIC")
                         // Push job status forward (IN_PROGRESS, COMPLETED)

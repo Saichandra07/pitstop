@@ -182,7 +182,7 @@ function HeartbeatMap({ bottomOffset }) {
 }
 
 // ─── Active Map ───────────────────────────────────────────────────────────────
-function ActiveMap({ bottomOffset }) {
+function ActiveMap() {
   return (
     <div style={{ position:"absolute", inset:0, background:"var(--bg)" }}>
       {/* Grid */}
@@ -193,14 +193,6 @@ function ActiveMap({ bottomOffset }) {
       <div style={{ position:"absolute", top:"43%", left:"50%", transform:"translate(-50%,-50%)", width:56, height:56, borderRadius:"50%", background:"radial-gradient(circle, rgba(230,57,70,0.2) 0%, transparent 70%)", border:"1.5px solid rgba(230,57,70,0.25)", pointerEvents:"none" }} />
       <div style={{ position:"absolute", top:"43%", left:"50%", transform:"translate(-50%,-50%)", width:16, height:16, borderRadius:"50%", background:"var(--red)", boxShadow:"0 0 0 5px rgba(230,57,70,0.25), 0 0 28px rgba(230,57,70,0.65)", zIndex:3 }} />
       <div style={{ position:"absolute", top:"43%", left:"50%", transform:"translate(-50%, calc(-50% + 18px))", zIndex:3, pointerEvents:"none", fontSize:9, fontWeight:700, letterSpacing:"2.5px", textTransform:"uppercase", color:"rgba(230,57,70,0.5)" }}>YOU</div>
-      {/* Status card */}
-      <div style={{ position:"absolute", left:16, right:16, bottom:bottomOffset+14, background:"rgba(18,20,31,0.96)", border:"1px solid rgba(74,222,128,0.25)", borderRadius:12, padding:"10px 14px", display:"flex", alignItems:"center", gap:10, transition:"bottom 0.35s cubic-bezier(0.32,0.72,0,1)", zIndex:3 }}>
-        <div style={{ width:8, height:8, borderRadius:"50%", background:"var(--green)", flexShrink:0, boxShadow:"0 0 8px rgba(74,222,128,0.6)" }} />
-        <div>
-          <div style={{ fontSize:12, fontWeight:600, color:"var(--green)" }}>Mechanic on the way</div>
-          <div style={{ fontSize:10, color:"var(--text-3)", marginTop:2 }}>Live tracking coming soon</div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -225,6 +217,7 @@ export default function DashboardPage() {
   const [dragStartY, setDragStartY]           = useState(null);
   const [dragStartH, setDragStartH]           = useState(null);
   const [liveSheetH, setLiveSheetH]           = useState(null);
+  const [rebroadcastBanner, setRebroadcastBanner] = useState(false);
 
   const prevStatusRef = useRef(null);
 
@@ -249,6 +242,16 @@ export default function DashboardPage() {
         } catch {}
       }
 
+      // Mechanic abandoned: was ACCEPTED/IN_PROGRESS, now PENDING → show banner
+      if (found?.status === "PENDING" &&
+          (prevStatusRef.current === "ACCEPTED" || prevStatusRef.current === "IN_PROGRESS")) {
+        setRebroadcastBanner(true);
+      }
+      // Clear banner once job leaves PENDING or disappears
+      if (prevStatusRef.current === "PENDING" && (!found || found.status !== "PENDING")) {
+        setRebroadcastBanner(false);
+      }
+
       prevStatusRef.current = found?.status ?? null;
       setActiveJob(found || null);
     } catch { setActiveJob(null); }
@@ -269,9 +272,9 @@ export default function DashboardPage() {
     })();
   }, [fetchActive, fetchHistory]);
 
-  // Poll every 5s while a job is PENDING — keeps ring number live
+  // Poll every 5s for any active job — catches status changes from either side
   useEffect(() => {
-    if (activeJob?.status !== "PENDING") return;
+    if (!activeJob || !ACTIVE_STATUSES.includes(activeJob.status)) return;
     const id = setInterval(fetchActive, 5000);
     return () => clearInterval(id);
   }, [activeJob?.status, fetchActive]);
@@ -323,7 +326,7 @@ export default function DashboardPage() {
     >
       {/* Map — HeartbeatMap when idle or PENDING (still searching), ActiveMap only when mechanic is assigned */}
       {(hasActiveJob && (activeJob.status === "ACCEPTED" || activeJob.status === "IN_PROGRESS"))
-        ? <ActiveMap bottomOffset={mapBottomOffset} />
+        ? <ActiveMap />
         : <HeartbeatMap bottomOffset={mapBottomOffset} />}
 
       {/* ── TopBar — absolute over map ── */}
@@ -443,6 +446,16 @@ export default function DashboardPage() {
               Active request
             </div>
 
+            {/* Mechanic-abandoned banner */}
+            {rebroadcastBanner && (
+              <div style={{ display:"flex", alignItems:"center", gap:8, background:"rgba(230,57,70,0.08)", border:"1px solid rgba(230,57,70,0.2)", borderRadius:10, padding:"8px 12px", marginBottom:10 }}>
+                <span style={{ fontSize:12 }}>⚠️</span>
+                <span style={{ fontSize:12, color:"var(--text-2)" }}>
+                  Previous mechanic couldn't continue. Finding a new one...
+                </span>
+              </div>
+            )}
+
             {/* PENDING — ring broadcast progress */}
             {activeJob.status === "PENDING" && (
               <div style={{ display:"flex", alignItems:"center", gap:12, background:"var(--surface2)", borderRadius:12, padding:"10px 12px", marginBottom:12 }}>
@@ -468,12 +481,14 @@ export default function DashboardPage() {
             </div>
 
             {(activeJob.status === "ACCEPTED" || activeJob.status === "IN_PROGRESS") && (
-              <div style={{ display:"flex", alignItems:"center", gap:10, background:"var(--surface2)", borderRadius:12, padding:"9px 12px", marginBottom:10 }}>
-                <div style={{ width:30, height:30, borderRadius:"50%", background:"var(--surface3)", border:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:600, color:"var(--text-3)", flexShrink:0 }}>M</div>
+              <div style={{ display:"flex", alignItems:"center", gap:10, background:"rgba(74,222,128,0.07)", border:"1px solid rgba(74,222,128,0.2)", borderRadius:12, padding:"10px 12px", marginBottom:10 }}>
+                <div style={{ width:8, height:8, borderRadius:"50%", background:"var(--green)", flexShrink:0, boxShadow:"0 0 8px rgba(74,222,128,0.6)" }} />
                 <div>
-                  <div style={{ fontSize:13, color:"var(--text)", fontWeight:500 }}>Mechanic assigned</div>
+                  <div style={{ fontSize:13, fontWeight:600, color:"var(--green)" }}>
+                    {activeJob.status === "IN_PROGRESS" ? "Mechanic arrived" : "Mechanic on the way"}
+                  </div>
                   <div style={{ fontSize:11, color:"var(--text-3)", marginTop:2 }}>
-                    {activeJob.status === "IN_PROGRESS" ? "Working on your vehicle" : "On the way to you"}
+                    {activeJob.status === "IN_PROGRESS" ? "Working on your vehicle" : "Live tracking coming soon"}
                   </div>
                 </div>
               </div>

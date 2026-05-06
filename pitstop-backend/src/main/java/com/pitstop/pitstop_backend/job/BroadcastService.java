@@ -146,6 +146,38 @@ public class BroadcastService {
         mechanicProfileRepository.save(profile);
     }
 
+    // Mechanic abandons active job — resets to PENDING and restarts Ring 1 broadcast.
+    @Transactional
+    public void mechanicAbandon(Long jobId, Long accountId) {
+        MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "No mechanic profile found"));
+
+        Job job = jobRepository.findById(jobId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Job not found"));
+
+        if (!profile.getId().equals(job.getMechanicProfileId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This is not your job");
+        }
+
+        if (job.getStatus() != JobStatus.ACCEPTED && job.getStatus() != JobStatus.IN_PROGRESS) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Job is not active");
+        }
+
+        // Expire any leftover broadcasts
+        jobBroadcastRepository.expireAllSentForJob(jobId);
+
+        // Reset job to PENDING Ring 1 — ready for rebroadcast
+        job.setStatus(JobStatus.PENDING);
+        job.setMechanicProfileId(null);
+        job.setBroadcastRing(1);
+        job.setBroadcastStartedAt(LocalDateTime.now());
+        jobRepository.save(job);
+
+        // Restart broadcast from Ring 1
+        broadcastToRing(job);
+    }
+
     // Returns the pending broadcast for a mechanic — used for dashboard polling.
     public Optional<BroadcastJobResponse> getPendingBroadcast(Long accountId) {
         MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)

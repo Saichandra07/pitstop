@@ -156,6 +156,13 @@ public class JobController {
         return ResponseEntity.noContent().build();
     }
 
+    // POST /api/jobs/{id}/mechanic-abandon — MECHANIC abandons active job, triggers rebroadcast
+    @PostMapping("/{id}/mechanic-abandon")
+    public ResponseEntity<Void> mechanicAbandon(@PathVariable Long id) {
+        broadcastService.mechanicAbandon(id, getAccountId());
+        return ResponseEntity.noContent().build();
+    }
+
     // GET /api/jobs/broadcast/pending — MECHANIC polls for their pending broadcast
     @GetMapping("/broadcast/pending")
     public ResponseEntity<BroadcastJobResponse> getPendingBroadcast() {

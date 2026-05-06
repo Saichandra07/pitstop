@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from "react";
+
+const NavigationMap = lazy(() => import("../components/NavigationMap"));
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
@@ -100,9 +102,11 @@ function SuspendedWall({ onLogout }) {
   );
 }
 
+const VEHICLE_EMOJIS = {
+  TWO_WHEELER: "🏍️", THREE_WHEELER: "🛺", FOUR_WHEELER: "🚗", SIX_PLUS_WHEELER: "🚛",
+};
+
 // ─── Job Request Card ─────────────────────────────────────────────────────────
-// Full-screen overlay shown when a job is broadcast to this mechanic.
-// sentAt (ISO string) drives the 90s countdown.
 function JobRequestCard({ broadcast, onAccept, onDecline }) {
   const deadline = useMemo(
     () => new Date(broadcast.sentAt).getTime() + 90_000,
@@ -122,48 +126,55 @@ function JobRequestCard({ broadcast, onAccept, onDecline }) {
 
   const urgent = remaining <= 30;
   const pct    = (remaining / 90) * 100;
-
-  const fmtLabel = (val) => (val || "—").replace(/_/g, " ").toLowerCase()
-    .replace(/\b\w/g, c => c.toUpperCase());
+  const fmtLabel = (val) => (val || "—").replace(/_/g, " ").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 
   return (
-    <div style={{ position:"absolute", inset:0, zIndex:50, background:"rgba(12,14,22,0.88)", backdropFilter:"blur(6px)", display:"flex", alignItems:"flex-end", padding:"0 0 72px" }}>
-      <div style={{ width:"100%", background:"var(--surface)", borderRadius:"20px 20px 0 0", padding:"20px 16px 24px", border:"1px solid rgba(255,183,0,0.25)", borderBottom:"none" }}>
-        {/* Header */}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-          <span className="ps-tag ps-tag-red" style={{ fontSize:9, letterSpacing:"1.5px" }}>NEW SOS</span>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{ fontSize:22, fontWeight:800, color: urgent ? "var(--red)" : "var(--gold)", fontVariantNumeric:"tabular-nums", transition:"color 0.3s" }}>{remaining}s</span>
-            <span style={{ fontSize:10, color:"var(--text-3)" }}>to respond</span>
-          </div>
-        </div>
+    <div style={{ position:"absolute", inset:0, zIndex:50, background:"rgba(10,11,18,0.92)", backdropFilter:"blur(8px)", display:"flex", alignItems:"flex-end", padding:"0 0 72px" }}>
+      <div style={{ width:"100%", background:"var(--surface)", borderRadius:"22px 22px 0 0", overflow:"hidden", border:"1px solid rgba(255,183,0,0.3)", borderBottom:"none", boxShadow:"0 -8px 40px rgba(0,0,0,0.5)" }}>
+        {/* Gold top stripe */}
+        <div style={{ height:3, background: urgent ? "linear-gradient(90deg,var(--red),rgba(230,57,70,0.2))" : "linear-gradient(90deg,var(--gold),rgba(255,183,0,0.2))", transition:"background 0.3s" }} />
 
-        {/* Timer bar */}
-        <div style={{ height:3, background:"var(--surface3)", borderRadius:2, marginBottom:16 }}>
-          <div style={{ height:"100%", width:`${pct}%`, borderRadius:2, background: urgent ? "var(--red)" : "var(--gold)", transition:"width 1s linear, background 0.3s" }} />
-        </div>
-
-        {/* Job info */}
-        <div style={{ background:"var(--surface2)", borderRadius:14, padding:"12px 14px", marginBottom:16, border:"1px solid var(--border)" }}>
-          <div style={{ fontSize:15, fontWeight:700, color:"var(--text)", marginBottom:4 }}>{fmtLabel(broadcast.problemType)}</div>
-          <div style={{ fontSize:12, color:"var(--text-3)", marginBottom:8 }}>{fmtLabel(broadcast.vehicleType)} · {broadcast.vehicleName || "—"}</div>
-          {broadcast.area && (
-            <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-              <span style={{ fontSize:12 }}>📍</span>
-              <span style={{ fontSize:11, color:"var(--text-2)" }}>{broadcast.area}</span>
+        <div style={{ padding:"16px 16px 20px" }}>
+          {/* Header: badge + countdown */}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+            <span className="ps-tag ps-tag-red" style={{ fontSize:9, letterSpacing:"1.5px" }}>● NEW SOS</span>
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontSize:30, fontWeight:800, color: urgent ? "var(--red)" : "var(--gold)", fontVariantNumeric:"tabular-nums", lineHeight:1, transition:"color 0.3s" }}>{remaining}s</div>
+              <div style={{ fontSize:9, color:"var(--text-3)", letterSpacing:"0.5px" }}>TO RESPOND</div>
             </div>
-          )}
-        </div>
+          </div>
 
-        {/* Ring indicator */}
-        <div style={{ fontSize:10, color:"var(--text-3)", textAlign:"center", marginBottom:16, letterSpacing:"0.5px" }}>
-          Ring {broadcast.broadcastRing} of 4 · Escalates if you don't respond
-        </div>
+          {/* Timer bar */}
+          <div style={{ height:3, background:"var(--surface3)", borderRadius:2, marginBottom:14 }}>
+            <div style={{ height:"100%", width:`${pct}%`, borderRadius:2, background: urgent ? "var(--red)" : "var(--gold)", transition:"width 1s linear, background 0.3s" }} />
+          </div>
 
-        {/* Buttons */}
-        <div style={{ display:"flex", gap:10 }}>
-          <button onClick={() => onDecline(broadcast.jobId)} className="ps-btn-ghost" style={{ flex:1, height:48, fontSize:13 }}>Decline</button>
-          <button onClick={() => onAccept(broadcast.jobId)} className="ps-btn" style={{ flex:2, height:48, fontSize:14 }}>Accept Job</button>
+          {/* Job info */}
+          <div style={{ display:"flex", gap:12, background:"var(--surface2)", borderRadius:12, padding:"12px", marginBottom:12, border:"1px solid var(--border)", alignItems:"center" }}>
+            <div style={{ width:46, height:46, borderRadius:12, background:"var(--surface3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, flexShrink:0 }}>
+              {VEHICLE_EMOJIS[broadcast.vehicleType] || "🚗"}
+            </div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:14, fontWeight:700, color:"var(--text)", marginBottom:3 }}>{fmtLabel(broadcast.problemType)}</div>
+              <div style={{ fontSize:11, color:"var(--text-3)", marginBottom: broadcast.area ? 4 : 0 }}>{fmtLabel(broadcast.vehicleType)} · {broadcast.vehicleName || "—"}</div>
+              {broadcast.area && (
+                <div style={{ fontSize:11, color:"var(--text-2)", display:"flex", alignItems:"center", gap:4 }}>
+                  <span>📍</span>{broadcast.area}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Ring indicator */}
+          <div style={{ fontSize:10, color:"var(--text-3)", textAlign:"center", marginBottom:14, letterSpacing:"0.5px", textTransform:"uppercase" }}>
+            Ring {broadcast.broadcastRing} of 4 · Escalates if you don't respond
+          </div>
+
+          {/* Buttons */}
+          <div style={{ display:"flex", gap:10 }}>
+            <button onClick={() => onDecline(broadcast.jobId)} className="ps-btn-ghost" style={{ flex:1, height:48, fontSize:13 }}>Decline</button>
+            <button onClick={() => onAccept(broadcast.jobId)} className="ps-btn" style={{ flex:2, height:48, fontSize:14, fontWeight:700 }}>Accept ✓</button>
+          </div>
         </div>
       </div>
     </div>
@@ -242,6 +253,7 @@ export default function MechanicDashboardPage() {
   const [loading, setLoading]                   = useState(true);
   const [pendingJobs, setPendingJobs]           = useState([]);
   const [activeJob, setActiveJob]               = useState(null);
+  const [mechCoords, setMechCoords]             = useState(null);
   const [pendingBroadcast, setPendingBroadcast] = useState(null);
   const [togglingAvail, setTogglingAvail]       = useState(false);
   const [activeJobLoading, setActiveJobLoading] = useState(false);
@@ -253,7 +265,10 @@ export default function MechanicDashboardPage() {
     catch { return {}; }
   });
   const snackbarTimer                           = useRef(null);
+  const prevActiveJobRef                        = useRef(null);
+  const expectingJobEndRef                      = useRef(false);
 
+  const [jobCancelledByUser, setJobCancelledByUser] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [dragging, setDragging]           = useState(false);
   const [dragStartY, setDragStartY]       = useState(null);
@@ -279,8 +294,17 @@ export default function MechanicDashboardPage() {
   }, []);
 
   const fetchActiveJob = useCallback(async () => {
-    try { const res = await api.get("/jobs/mechanic/active"); setActiveJob(res.data); }
-    catch { setActiveJob(null); }
+    try {
+      const res = await api.get("/jobs/mechanic/active");
+      const job = res.data?.id ? res.data : null;
+
+      // Job disappeared without mechanic action → user cancelled mid-job
+      if (prevActiveJobRef.current?.id && !job && !expectingJobEndRef.current) {
+        setJobCancelledByUser(true);
+      }
+      prevActiveJobRef.current = job;
+      setActiveJob(job);
+    } catch { setActiveJob(null); }
   }, []);
 
   useEffect(() => { fetchMe(); }, [fetchMe]);
@@ -291,6 +315,29 @@ export default function MechanicDashboardPage() {
       if (me.isAvailable) fetchPendingJobs();
     }
   }, [me, fetchPendingJobs, fetchActiveJob]);
+
+  // Recover mechCoords after page refresh — mechanic is auto-offline during active job,
+  // so we cannot check isAvailable here. Check activeJob only.
+  useEffect(() => {
+    if (activeJob && !mechCoords) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setMechCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => {}
+      );
+    }
+  }, [activeJob?.id, mechCoords]);
+
+  // Poll active job every 5s while one exists — picks up user cancellations
+  useEffect(() => {
+    if (!activeJob) return;
+    const id = setInterval(fetchActiveJob, 5000);
+    return () => clearInterval(id);
+  }, [activeJob?.id, fetchActiveJob]);
+
+  // Dismiss the cancel overlay once mechanic successfully goes back online
+  useEffect(() => {
+    if (jobCancelledByUser && me?.isAvailable) setJobCancelledByUser(false);
+  }, [me?.isAvailable, jobCancelledByUser]);
 
   // Poll for broadcast every 5s when online — replaces manual job list with targeted push
   useEffect(() => {
@@ -340,10 +387,14 @@ export default function MechanicDashboardPage() {
 
     if (goingOnline) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => doToggle(pos.coords.latitude, pos.coords.longitude),
+        (pos) => {
+          setMechCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          doToggle(pos.coords.latitude, pos.coords.longitude);
+        },
         () => { showSnackbar("Location required to go online", "error"); setTogglingAvail(false); }
       );
     } else {
+      setMechCoords(null);
       await doToggle(null, null);
     }
   }
@@ -375,11 +426,13 @@ export default function MechanicDashboardPage() {
     try {
       await api.patch(`/jobs/${jobId}/status`, { status });
       await fetchMe();
+      expectingJobEndRef.current = true;
       await fetchActiveJob();
       if (status === "COMPLETED") showSnackbar("Job marked complete 🎉", "success");
     } catch {
       showSnackbar("Failed to update job status", "error");
     } finally {
+      expectingJobEndRef.current = false;
       setActiveJobLoading(false);
     }
   }
@@ -436,8 +489,42 @@ export default function MechanicDashboardPage() {
       onMouseMove={(e) => dragging && moveDrag(e.clientY)}
       onMouseUp={(e)   => dragging && endDrag(e.clientY)}
     >
-      {/* Map layer */}
-      <MechanicMap hasActiveJob={hasActiveJob} isOnline={isOnline} />
+      {/* Map layer — real Leaflet when job active + coords known, gold grid otherwise */}
+      {hasActiveJob && mechCoords && activeJob?.latitude ? (
+        <Suspense fallback={<MechanicMap hasActiveJob={true} isOnline={true} />}>
+          <NavigationMap
+            mechLat={mechCoords.lat}
+            mechLng={mechCoords.lng}
+            userLat={activeJob.latitude}
+            userLng={activeJob.longitude}
+          />
+        </Suspense>
+      ) : (
+        <MechanicMap hasActiveJob={hasActiveJob} isOnline={isOnline} />
+      )}
+
+      {/* ── Google Maps button — always visible when active job has user coords ── */}
+      {/* Uses destination-only URL so Google Maps uses device GPS as start point */}
+      {hasActiveJob && activeJob?.latitude && (
+        <button
+          onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${activeJob.latitude},${activeJob.longitude}&travelmode=driving&dir_action=navigate`, "_blank")}
+          style={{
+            position: "absolute", bottom: 330, right: 16, zIndex: 25,
+            display: "flex", alignItems: "center", gap: 6,
+            background: "rgba(12,14,22,0.92)", backdropFilter: "blur(6px)",
+            border: "1px solid rgba(255,183,0,0.35)", borderRadius: 9999,
+            padding: "9px 14px", cursor: "pointer",
+            color: "var(--gold)", fontSize: 12, fontWeight: 600,
+            boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke="#FFB700" strokeWidth="1.5"/>
+            <circle cx="12" cy="9" r="2.5" stroke="#FFB700" strokeWidth="1.5"/>
+          </svg>
+          Open in Google Maps
+        </button>
+      )}
 
       {/* ── TopBar ── */}
       <div style={{
@@ -448,27 +535,29 @@ export default function MechanicDashboardPage() {
       }}>
         <PitStopLogo variant="topbar" />
 
-        {/* Online / offline pill — center */}
+        {/* Online / offline pill — center; shows "On Job" during active job */}
         <div
-          onClick={handleToggleAvailability}
+          onClick={hasActiveJob ? undefined : handleToggleAvailability}
           style={{
             display: "flex", alignItems: "center", gap: 8,
             background: "rgba(18,20,31,0.92)", backdropFilter: "blur(4px)",
-            border: `1px solid ${isOnline ? "var(--green-border)" : "var(--border)"}`,
+            border: `1px solid ${hasActiveJob ? "rgba(255,183,0,0.35)" : isOnline ? "var(--green-border)" : "var(--border)"}`,
             borderRadius: 9999, padding: "7px 14px",
-            cursor: togglingAvail ? "wait" : "pointer",
+            cursor: hasActiveJob ? "default" : togglingAvail ? "wait" : "pointer",
             opacity: togglingAvail ? 0.6 : 1,
             transition: "opacity 0.2s, border-color 0.2s",
           }}
         >
-          <div style={{ width: 7, height: 7, borderRadius: "50%", background: isOnline ? "var(--green)" : "var(--text-3)", flexShrink: 0, transition: "background 0.2s" }} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", letterSpacing: "0.02em" }}>
-            {togglingAvail ? "..." : isOnline ? "Online" : "Offline"}
+          <div style={{ width: 7, height: 7, borderRadius: "50%", background: hasActiveJob ? "var(--gold)" : isOnline ? "var(--green)" : "var(--text-3)", flexShrink: 0, transition: "background 0.2s" }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: hasActiveJob ? "var(--gold)" : "var(--text)", letterSpacing: "0.02em" }}>
+            {togglingAvail ? "..." : hasActiveJob ? "On Job" : isOnline ? "Online" : "Offline"}
           </span>
-          {/* Toggle track */}
-          <div style={{ width: 30, height: 17, borderRadius: 9, background: isOnline ? "var(--green)" : "var(--surface3)", border: `1px solid ${isOnline ? "var(--green-border)" : "var(--border)"}`, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-            <div style={{ position: "absolute", top: 2, width: 13, height: 13, borderRadius: "50%", background: "var(--text)", left: isOnline ? "calc(100% - 15px)" : 2, transition: "left 0.2s" }} />
-          </div>
+          {/* Toggle track — hidden during active job */}
+          {!hasActiveJob && (
+            <div style={{ width: 30, height: 17, borderRadius: 9, background: isOnline ? "var(--green)" : "var(--surface3)", border: `1px solid ${isOnline ? "var(--green-border)" : "var(--border)"}`, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+              <div style={{ position: "absolute", top: 2, width: 13, height: 13, borderRadius: "50%", background: "var(--text)", left: isOnline ? "calc(100% - 15px)" : 2, transition: "left 0.2s" }} />
+            </div>
+          )}
         </div>
 
         {/* Bell + Avatar */}
@@ -510,32 +599,41 @@ export default function MechanicDashboardPage() {
         {hasActiveJob && (
           <>
             <div className="ps-section-label">Active job</div>
-            <div className="ps-card ps-card-gold">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text)" }}>{PROBLEM_LABELS[activeJob.problemType] || activeJob.problemType}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 3 }}>{VEHICLE_LABELS[activeJob.vehicleType] || activeJob.vehicleType} · {activeJob.vehicleName}</div>
+            <div className="ps-card ps-card-gold" style={{ padding: "12px 14px" }}>
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                <div style={{ flex: 1, minWidth: 0, marginRight: 10 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 3 }}>
+                    {PROBLEM_LABELS[activeJob.problemType] || activeJob.problemType}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-3)" }}>
+                    {VEHICLE_LABELS[activeJob.vehicleType] || activeJob.vehicleType} · {activeJob.vehicleName}
+                  </div>
                 </div>
                 <span className={`ps-tag ${activeJob.status === "IN_PROGRESS" ? "ps-tag-green" : "ps-tag-gold"}`}>
-                  {activeJob.status === "ACCEPTED" ? "Accepted" : "In progress"}
+                  {activeJob.status === "ACCEPTED" ? "En route" : "In progress"}
                 </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--surface)", borderRadius: 12, padding: "9px 12px", marginBottom: 10, border: "1px solid var(--border)" }}>
-                <div style={{ width: 30, height: 30, borderRadius: "50%", background: "var(--surface2)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, color: "var(--text-3)" }}>U</div>
-                <div>
-                  <div style={{ fontSize: 13, color: "var(--text)", fontWeight: 500 }}>User location</div>
-                  <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>Active request</div>
-                </div>
+              {/* Next action hint */}
+              <div style={{ fontSize: 11, color: "var(--text-3)", background: "var(--surface)", borderRadius: 8, padding: "7px 10px", marginBottom: 10 }}>
+                {activeJob.status === "ACCEPTED"
+                  ? "📍 Navigate to user — tap Mark Arrived when you get there"
+                  : "🔧 Repair in progress — tap Mark Complete when done"}
               </div>
-              <div className="ps-btn-row">
+              {/* Actions */}
+              <div style={{ display: "flex", gap: 8 }}>
                 {activeJob.status === "ACCEPTED" && (
-                  <button onClick={() => handleJobStatus(activeJob.id, "IN_PROGRESS")} disabled={activeJobLoading} className="ps-btn-outline" style={{ height: 40, padding: 0, fontSize: 12, opacity: activeJobLoading ? 0.5 : 1 }}>Mark Arrived</button>
+                  <button onClick={() => handleJobStatus(activeJob.id, "IN_PROGRESS")} disabled={activeJobLoading} className="ps-btn-outline" style={{ flex: 2, height: 40, fontSize: 12, padding: 0, opacity: activeJobLoading ? 0.5 : 1 }}>
+                    Mark Arrived
+                  </button>
                 )}
                 {activeJob.status === "IN_PROGRESS" && (
-                  <button onClick={() => handleJobStatus(activeJob.id, "COMPLETED")} disabled={activeJobLoading} className="ps-btn" style={{ height: 40, padding: 0, fontSize: 12, opacity: activeJobLoading ? 0.5 : 1 }}>Mark complete</button>
+                  <button onClick={() => handleJobStatus(activeJob.id, "COMPLETED")} disabled={activeJobLoading} className="ps-btn" style={{ flex: 2, height: 40, fontSize: 12, padding: 0, opacity: activeJobLoading ? 0.5 : 1 }}>
+                    Mark Complete ✓
+                  </button>
                 )}
-                <button onClick={() => window.open("tel:", "_self")} className="ps-btn-ghost" style={{ height: 40, padding: 0, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
-                  <PhoneIcon /> Call user
+                <button onClick={() => window.open("tel:", "_self")} className="ps-btn-ghost" style={{ flex: 1, height: 40, fontSize: 12, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                  <PhoneIcon /> Call
                 </button>
               </div>
             </div>
@@ -604,10 +702,84 @@ export default function MechanicDashboardPage() {
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
               <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--surface3)" }} />
             </div>
-            <p style={{ color: "var(--text)", fontWeight: 600, fontSize: 16, marginBottom: 6, textAlign: "center" }}>Log out of PitStop?</p>
-            <p style={{ color: "var(--text-3)", fontSize: 13, textAlign: "center", marginBottom: 24 }}>You'll need to sign back in to receive jobs.</p>
-            <button onClick={handleLogout} className="ps-btn" style={{ marginBottom: 10 }}>Log out</button>
-            <button onClick={() => setShowLogoutSheet(false)} className="ps-btn-ghost">Cancel</button>
+
+            {hasActiveJob ? (
+              /* ── Active job warning ── */
+              <>
+                <div style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--red-soft)", border: "1px solid var(--red-border)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 9v4M12 16.5v.5" stroke="var(--red)" strokeWidth="2" strokeLinecap="round"/>
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="var(--red)" strokeWidth="1.5" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                <p style={{ color: "var(--text)", fontWeight: 700, fontSize: 16, marginBottom: 8, textAlign: "center" }}>You have an active job</p>
+                <p style={{ color: "var(--text-3)", fontSize: 13, textAlign: "center", marginBottom: 24, lineHeight: 1.5 }}>
+                  Logging out mid-job abandons the user and may result in a penalty on your account.
+                </p>
+                <button onClick={() => setShowLogoutSheet(false)} className="ps-btn" style={{ marginBottom: 10 }}>
+                  Complete job first
+                </button>
+                <button
+                  onClick={async () => {
+                    try { await api.post(`/jobs/${activeJob.id}/mechanic-abandon`); } catch {}
+                    handleLogout();
+                  }}
+                  style={{ width: "100%", background: "transparent", border: "none", color: "var(--red)", fontSize: 13, fontWeight: 500, padding: "10px 0", cursor: "pointer", opacity: 0.7 }}
+                >
+                  Log out anyway
+                </button>
+              </>
+            ) : (
+              /* ── Normal logout ── */
+              <>
+                <p style={{ color: "var(--text)", fontWeight: 600, fontSize: 16, marginBottom: 6, textAlign: "center" }}>Log out of PitStop?</p>
+                <p style={{ color: "var(--text-3)", fontSize: 13, textAlign: "center", marginBottom: 24 }}>You'll need to sign back in to receive jobs.</p>
+                <button onClick={handleLogout} className="ps-btn" style={{ marginBottom: 10 }}>Log out</button>
+                <button onClick={() => setShowLogoutSheet(false)} className="ps-btn-ghost">Cancel</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── User-cancelled overlay ── */}
+      {jobCancelledByUser && !hasActiveJob && (
+        <div style={{
+          position: "absolute", inset: 0, zIndex: 90,
+          background: "rgba(10,11,18,0.88)", backdropFilter: "blur(6px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "0 24px",
+        }}>
+          <div className="ps-card" style={{ width: "100%", maxWidth: 340, padding: "28px 24px", textAlign: "center", border: "1px solid rgba(255,183,0,0.25)" }}>
+            {/* Icon */}
+            <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(255,183,0,0.1)", border: "1px solid rgba(255,183,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px" }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="var(--gold)" strokeWidth="1.5" strokeLinejoin="round"/>
+                <path d="M12 9v4M12 16.5v.5" stroke="var(--gold)" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </div>
+
+            <div style={{ fontSize: 17, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>
+              Job Cancelled
+            </div>
+            <div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.6, marginBottom: 28 }}>
+              The user cancelled the request before you arrived. Go online to receive new jobs.
+            </div>
+
+            <button
+              onClick={() => { setJobCancelledByUser(false); handleToggleAvailability(); }}
+              disabled={togglingAvail}
+              className="ps-btn"
+              style={{ marginBottom: 10, opacity: togglingAvail ? 0.6 : 1 }}
+            >
+              {togglingAvail ? "Getting location…" : "Go Online Again"}
+            </button>
+            <button
+              onClick={() => setJobCancelledByUser(false)}
+              className="ps-btn-ghost"
+            >
+              Stay Offline
+            </button>
           </div>
         </div>
       )}

@@ -36,13 +36,17 @@ public class BroadcastScheduler {
         for (Job job : staleJobs) {
             long sentCount = jobBroadcastRepository.countByJobIdAndRingAndStatus(
                     job.getId(), job.getBroadcastRing(), JobBroadcastStatus.SENT);
-            long totalInRing = jobBroadcastRepository.countByJobIdAndRing(
-                    job.getId(), job.getBroadcastRing());
+
+            // Count only broadcasts from the current ring lifecycle (sentAt >= broadcastStartedAt).
+            // This ignores stale rows from a previous assignment (e.g. after mechanic-abandon),
+            // which would otherwise prevent the "ring was empty" path from ever firing.
+            long currentLifecycleCount = jobBroadcastRepository
+                    .countByJobIdAndRingAndSentAtGreaterThanEqual(
+                            job.getId(), job.getBroadcastRing(), job.getBroadcastStartedAt());
 
             // Advance if mechanics timed out (sentCount > 0)
-            //         OR ring was empty — no broadcasts ever created (totalInRing == 0)
-            // Skip if sentCount==0 && totalInRing>0: all declined inline, already handled.
-            if (sentCount > 0 || totalInRing == 0) {
+            //         OR ring was empty in this lifecycle — no broadcasts created (currentLifecycleCount == 0)
+            if (sentCount > 0 || currentLifecycleCount == 0) {
                 broadcastService.advanceOrTimeout(job);
             }
         }
