@@ -71,6 +71,14 @@ public class MechanicProfile {
     @Column(nullable = true)
     private Double longitude;
 
+    // Saved when mechanic accepts a job (before lat/lng are cleared).
+    // Restored when user cancels, so mechanic automatically comes back online.
+    @Column(nullable = true)
+    private Double lastKnownLatitude;
+
+    @Column(nullable = true)
+    private Double lastKnownLongitude;
+
     @PrePersist
     protected void onCreate() {
         if (this.verificationStatus == null) {
@@ -140,4 +148,10 @@ public class MechanicProfile {
 
     public Double getLongitude() { return longitude; }
     public void setLongitude(Double longitude) { this.longitude = longitude; }
+
+    public Double getLastKnownLatitude() { return lastKnownLatitude; }
+    public void setLastKnownLatitude(Double lastKnownLatitude) { this.lastKnownLatitude = lastKnownLatitude; }
+
+    public Double getLastKnownLongitude() { return lastKnownLongitude; }
+    public void setLastKnownLongitude(Double lastKnownLongitude) { this.lastKnownLongitude = lastKnownLongitude; }
 }

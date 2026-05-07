@@ -1,5 +1,7 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';import LoginPage from './pages/LoginPage';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import LoginPage from './pages/LoginPage';
 import { useAuth } from './context/AuthContext';
+import { BroadcastProvider } from './context/BroadcastContext';
 import RegisterPage from './pages/RegisterPage';
 import MechanicRegisterPage from './pages/MechanicRegisterPage';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -28,7 +30,7 @@ function RootRedirect() {
 function App() {
   return (
     <BrowserRouter>
-  
+      <BroadcastProvider>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
@@ -111,6 +113,7 @@ function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
       </Routes>
+      </BroadcastProvider>
     </BrowserRouter>
   )
 }

@@ -7,6 +7,7 @@ import BottomNav from "../components/BottomNav";
 import Avatar from "../components/Avatar";
 import StatGrid from "../components/StatGrid";
 import Badge from "../components/Badge";
+import BroadcastOverlay from "../components/BroadcastOverlay";
 
 const PencilIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
@@ -266,6 +267,9 @@ export default function ProfilePage() {
       </div>
 
       <BottomNav role={isMechanic ? "mechanic" : "user"} active="profile" />
+
+      {/* ── Global broadcast overlay (mechanic only) ── */}
+      {isMechanic && <BroadcastOverlay onAcceptSuccess={() => navigate('/mechanic/dashboard')} />}
     </div>
   );
 }

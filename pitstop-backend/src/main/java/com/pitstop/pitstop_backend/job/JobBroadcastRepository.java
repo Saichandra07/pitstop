@@ -14,7 +14,7 @@ public interface JobBroadcastRepository extends JpaRepository<JobBroadcast, Long
 
     List<JobBroadcast> findByJobIdAndStatus(Long jobId, JobBroadcastStatus status);
 
-    Optional<JobBroadcast> findByMechanicProfileIdAndStatus(Long mechanicProfileId, JobBroadcastStatus status);
+    List<JobBroadcast> findByMechanicProfileIdAndStatusOrderBySentAtDesc(Long mechanicProfileId, JobBroadcastStatus status);
 
     Optional<JobBroadcast> findByJobIdAndMechanicProfileId(Long jobId, Long mechanicProfileId);
 
@@ -30,6 +30,8 @@ public interface JobBroadcastRepository extends JpaRepository<JobBroadcast, Long
     // Used by the scheduler to ignore broadcasts from previous job lifecycles (pre-abandon).
     long countByJobIdAndRingAndSentAtGreaterThanEqual(Long jobId, Integer ring, LocalDateTime from);
 
+    long countByJobIdAndMechanicProfileIdAndStatus(Long jobId, Long mechanicProfileId, JobBroadcastStatus status);
+
     // Expire all outstanding broadcasts for a job (used when job times out or is cancelled)
     @Modifying
     @Transactional
@@ -41,4 +43,10 @@ public interface JobBroadcastRepository extends JpaRepository<JobBroadcast, Long
     @Transactional
     @Query("UPDATE JobBroadcast jb SET jb.status = 'EXPIRED' WHERE jb.jobId = :jobId AND jb.mechanicProfileId != :mechanicProfileId AND jb.status = 'SENT'")
     void expireAllSentForJobExcept(@Param("jobId") Long jobId, @Param("mechanicProfileId") Long mechanicProfileId);
+
+    // Permanently block a mechanic from this job — used on "Move On" and second abandon
+    @Modifying
+    @Transactional
+    @Query("UPDATE JobBroadcast jb SET jb.status = 'DECLINED' WHERE jb.jobId = :jobId AND jb.mechanicProfileId = :mechanicProfileId")
+    void declineAllForMechanicAndJob(@Param("jobId") Long jobId, @Param("mechanicProfileId") Long mechanicProfileId);
 }

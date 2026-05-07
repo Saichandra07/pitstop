@@ -2,15 +2,18 @@ package com.pitstop.pitstop_backend.job;
 
 import com.pitstop.pitstop_backend.account.MechanicProfile;
 import com.pitstop.pitstop_backend.account.MechanicProfileRepository;
+import com.pitstop.pitstop_backend.account.VerificationStatus;
+import com.pitstop.pitstop_backend.job.dto.AbandonResponse;
 import com.pitstop.pitstop_backend.job.dto.BroadcastJobResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class BroadcastService {
@@ -139,6 +142,10 @@ public class BroadcastService {
         job.setMechanicProfileId(mechanicProfileId);
         jobRepository.save(job);
 
+        // Snapshot location before clearing — used to restore online state if user cancels
+        profile.setLastKnownLatitude(profile.getLatitude());
+        profile.setLastKnownLongitude(profile.getLongitude());
+
         // Take mechanic offline automatically
         profile.setIsAvailable(false);
         profile.setLatitude(null);
@@ -146,9 +153,11 @@ public class BroadcastService {
         mechanicProfileRepository.save(profile);
     }
 
-    // Mechanic abandons active job — resets to PENDING and restarts Ring 1 broadcast.
+    // Mechanic abandons active job — resets to PENDING, restarts Ring 1 broadcast immediately
+    // (user never waits), restores mechanic online, and returns whether to show the offer screen.
+    // Second abandon on the same job triggers a day suspension.
     @Transactional
-    public void mechanicAbandon(Long jobId, Long accountId) {
+    public AbandonResponse mechanicAbandon(Long jobId, Long accountId) {
         MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "No mechanic profile found"));
@@ -164,7 +173,11 @@ public class BroadcastService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Job is not active");
         }
 
-        // Expire any leftover broadcasts
+        // Count prior ACCEPTED broadcasts for this mechanic on this job (detects second abandon)
+        long acceptedCount = jobBroadcastRepository.countByJobIdAndMechanicProfileIdAndStatus(
+                jobId, profile.getId(), JobBroadcastStatus.ACCEPTED);
+
+        // Expire leftover SENT broadcasts
         jobBroadcastRepository.expireAllSentForJob(jobId);
 
         // Reset job to PENDING Ring 1 — ready for rebroadcast
@@ -174,31 +187,132 @@ public class BroadcastService {
         job.setBroadcastStartedAt(LocalDateTime.now());
         jobRepository.save(job);
 
-        // Restart broadcast from Ring 1
+        // Restart broadcast from Ring 1 immediately — user is not made to wait
         broadcastToRing(job);
+
+        // Restore mechanic online at their last known location
+        profile.setIsAvailable(true);
+        profile.setLatitude(profile.getLastKnownLatitude());
+        profile.setLongitude(profile.getLastKnownLongitude());
+
+        AbandonResponse response;
+        if (acceptedCount >= 2) {
+            // Second abandon on same job — permanent block + day suspension
+            jobBroadcastRepository.declineAllForMechanicAndJob(jobId, profile.getId());
+            profile.setVerificationStatus(VerificationStatus.SUSPENDED);
+            profile.setSuspensionEndsAt(LocalDate.now().atTime(23, 59, 59));
+            profile.setSuspensionReason("Double abandonment on Job #" + jobId + " — suspended until midnight");
+            profile.setMidJobCancels(profile.getMidJobCancels() + 1);
+            response = new AbandonResponse(false, job.getId(), job.getProblemType().name(),
+                    job.getVehicleType().name(), job.getVehicleName(), job.getArea());
+        } else {
+            // First abandon — offer the mechanic a chance to take it back
+            response = new AbandonResponse(true, job.getId(), job.getProblemType().name(),
+                    job.getVehicleType().name(), job.getVehicleName(), job.getArea());
+        }
+
+        mechanicProfileRepository.save(profile);
+        return response;
     }
 
-    // Returns the pending broadcast for a mechanic — used for dashboard polling.
-    public Optional<BroadcastJobResponse> getPendingBroadcast(Long accountId) {
+    // Mechanic takes back a job they just abandoned — only valid if still PENDING.
+    @Transactional
+    public void mechanicTakeBack(Long jobId, Long accountId) {
         MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "No mechanic profile found"));
 
+        Job job = jobRepository.findById(jobId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Job not found"));
+
+        if (job.getStatus() != JobStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Job already taken by someone else");
+        }
+
+        // Expire SENT broadcasts that went to other mechanics after the abandon rebroadcast
+        jobBroadcastRepository.expireAllSentForJobExcept(jobId, profile.getId());
+
+        // New ACCEPTED row — count becomes 2, enabling second-abandon detection
+        JobBroadcast takeBackBroadcast = new JobBroadcast();
+        takeBackBroadcast.setJobId(jobId);
+        takeBackBroadcast.setMechanicProfileId(profile.getId());
+        takeBackBroadcast.setRing(job.getBroadcastRing());
+        takeBackBroadcast.setStatus(JobBroadcastStatus.ACCEPTED);
+        jobBroadcastRepository.save(takeBackBroadcast);
+
+        // Re-assign job
+        job.setStatus(JobStatus.ACCEPTED);
+        job.setMechanicProfileId(profile.getId());
+        jobRepository.save(job);
+
+        // Snapshot current location then take offline (mechanic is back on job)
+        profile.setLastKnownLatitude(profile.getLatitude());
+        profile.setLastKnownLongitude(profile.getLongitude());
+        profile.setIsAvailable(false);
+        profile.setLatitude(null);
+        profile.setLongitude(null);
+        mechanicProfileRepository.save(profile);
+    }
+
+    // Mechanic declines to take back the abandoned job — permanently blocks it and
+    // triggers newly-online notification for other nearby PENDING jobs.
+    @Transactional
+    public void mechanicMoveOn(Long jobId, Long accountId) {
+        MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "No mechanic profile found"));
+
+        // Permanent block — job will never be sent to this mechanic again via any path
+        jobBroadcastRepository.declineAllForMechanicAndJob(jobId, profile.getId());
+
+        // Mechanic already online (restored in mechanicAbandon); find any nearby PENDING jobs now
+        notifyNewlyOnlineMechanic(profile);
+    }
+
+    // Returns all pending broadcasts for a mechanic — used for polling.
+    // Returns empty list if mechanic is offline (on job or manually offline).
+    public List<BroadcastJobResponse> getPendingBroadcast(Long accountId) {
+        MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "No mechanic profile found"));
+
+        if (!profile.getIsAvailable()) {
+            return List.of();
+        }
+
         return jobBroadcastRepository
-                .findByMechanicProfileIdAndStatus(profile.getId(), JobBroadcastStatus.SENT)
+                .findByMechanicProfileIdAndStatusOrderBySentAtDesc(profile.getId(), JobBroadcastStatus.SENT)
+                .stream()
                 .flatMap(broadcast -> jobRepository.findById(broadcast.getJobId())
-                        .map(job -> new BroadcastJobResponse(
-                                broadcast.getId(),
-                                job.getId(),
-                                job.getStatus(),
-                                job.getVehicleType(),
-                                job.getProblemType(),
-                                job.getVehicleName(),
-                                job.getAddress(),
-                                job.getArea(),
-                                job.getBroadcastRing(),
-                                broadcast.getSentAt()
-                        )));
+                        .filter(job -> job.getStatus() == JobStatus.PENDING)
+                        .map(job -> {
+                            Double distKm  = null;
+                            Integer etaMin = null;
+                            if (profile.getLatitude() != null && profile.getLongitude() != null) {
+                                double d = haversineKm(
+                                        profile.getLatitude(), profile.getLongitude(),
+                                        job.getLatitude(),     job.getLongitude()
+                                );
+                                distKm = Math.round(d * 10.0) / 10.0;
+                                etaMin = (int) Math.ceil(d / 30.0 * 60.0);
+                            }
+                            return new BroadcastJobResponse(
+                                    broadcast.getId(),
+                                    job.getId(),
+                                    job.getStatus(),
+                                    job.getVehicleType(),
+                                    job.getProblemType(),
+                                    job.getVehicleName(),
+                                    job.getAddress(),
+                                    job.getArea(),
+                                    job.getBroadcastRing(),
+                                    broadcast.getSentAt(),
+                                    distKm,
+                                    etaMin
+                            );
+                        })
+                        .stream())
+                .collect(Collectors.toList());
     }
 
     // Called when a mechanic toggles online — find any PENDING jobs they're eligible for
@@ -218,6 +332,16 @@ public class BroadcastService {
             broadcast.setRing(job.getBroadcastRing());
             jobBroadcastRepository.save(broadcast);
         }
+    }
+
+    private double haversineKm(double lat1, double lon1, double lat2, double lon2) {
+        final double R = 6371.0;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                 + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                 * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
     // Advance to the next ring or cancel the job if ring 4 is exhausted.

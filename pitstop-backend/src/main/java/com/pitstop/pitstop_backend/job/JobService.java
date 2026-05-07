@@ -285,9 +285,25 @@ public class JobService {
                     "Job is already " + job.getStatus());
         }
 
+        // Expire any SENT broadcasts so mechanics stop seeing this job immediately
+        jobBroadcastRepository.expireAllSentForJob(jobId);
+
         job.setCancellationReason(CancellationReason.USER_CANCELLED);
         job.setStatus(JobStatus.CANCELLED);
-        return toDto(jobRepository.save(job));
+        jobRepository.save(job);
+
+        // If a mechanic was already assigned, automatically bring them back online
+        // using the location snapshot saved at accept time.
+        if (job.getMechanicProfileId() != null) {
+            mechanicProfileRepository.findById(job.getMechanicProfileId()).ifPresent(mp -> {
+                mp.setIsAvailable(true);
+                mp.setLatitude(mp.getLastKnownLatitude());
+                mp.setLongitude(mp.getLastKnownLongitude());
+                mechanicProfileRepository.save(mp);
+            });
+        }
+
+        return toDto(jobRepository.findById(job.getId()).orElse(job));
     }
 
     // Issue #11 — mechanic ownership check added
@@ -319,7 +335,21 @@ public class JobService {
         }
 
         job.setStatus(newStatus);
-        return toDto(jobRepository.save(job));
+        jobRepository.save(job);
+
+        // Mechanic marks COMPLETE → auto online, restore last known location,
+        // then treat like newly-online so nearby PENDING jobs reach them immediately.
+        if (newStatus == JobStatus.COMPLETED) {
+            profile.setIsAvailable(true);
+            profile.setLatitude(profile.getLastKnownLatitude());
+            profile.setLongitude(profile.getLastKnownLongitude());
+            mechanicProfileRepository.save(profile);
+            if (profile.getLatitude() != null && profile.getLongitude() != null) {
+                broadcastService.notifyNewlyOnlineMechanic(profile);
+            }
+        }
+
+        return toDto(jobRepository.findById(job.getId()).orElse(job));
     }
 
     // ── Delete ─────────────────────────────────────────────────────────────────

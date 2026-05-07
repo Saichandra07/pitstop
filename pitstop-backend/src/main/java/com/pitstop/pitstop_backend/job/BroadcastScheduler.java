@@ -1,5 +1,8 @@
 package com.pitstop.pitstop_backend.job;
 
+import com.pitstop.pitstop_backend.account.MechanicProfile;
+import com.pitstop.pitstop_backend.account.MechanicProfileRepository;
+import com.pitstop.pitstop_backend.account.VerificationStatus;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -14,15 +17,18 @@ public class BroadcastScheduler {
     private final JobRepository jobRepository;
     private final JobBroadcastRepository jobBroadcastRepository;
     private final BroadcastService broadcastService;
+    private final MechanicProfileRepository mechanicProfileRepository;
 
     public BroadcastScheduler(
             JobRepository jobRepository,
             JobBroadcastRepository jobBroadcastRepository,
-            BroadcastService broadcastService
+            BroadcastService broadcastService,
+            MechanicProfileRepository mechanicProfileRepository
     ) {
         this.jobRepository = jobRepository;
         this.jobBroadcastRepository = jobBroadcastRepository;
         this.broadcastService = broadcastService;
+        this.mechanicProfileRepository = mechanicProfileRepository;
     }
 
     // Runs every 30s. Finds PENDING jobs whose current ring has been live for > 2 mins.
@@ -49,6 +55,19 @@ public class BroadcastScheduler {
             if (sentCount > 0 || currentLifecycleCount == 0) {
                 broadcastService.advanceOrTimeout(job);
             }
+        }
+    }
+
+    // Runs at 12:01 AM daily — lifts day suspensions that expired at midnight.
+    @Scheduled(cron = "0 1 0 * * *")
+    public void liftExpiredSuspensions() {
+        List<MechanicProfile> suspended = mechanicProfileRepository
+                .findByVerificationStatusAndSuspensionEndsAtBefore(
+                        VerificationStatus.SUSPENDED, LocalDateTime.now());
+        for (MechanicProfile mp : suspended) {
+            mp.setVerificationStatus(VerificationStatus.VERIFIED);
+            mp.setSuspensionEndsAt(null);
+            mechanicProfileRepository.save(mp);
         }
     }
 }

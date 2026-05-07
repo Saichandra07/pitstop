@@ -1,5 +1,6 @@
 package com.pitstop.pitstop_backend.job;
 
+import com.pitstop.pitstop_backend.job.dto.AbandonResponse;
 import com.pitstop.pitstop_backend.job.dto.AdminJobResponse;
 import com.pitstop.pitstop_backend.job.dto.BroadcastJobResponse;
 import com.pitstop.pitstop_backend.job.dto.JobResponseDto;
@@ -12,7 +13,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import com.pitstop.pitstop_backend.config.CloudinaryService;
 import org.springframework.web.multipart.MultipartFile;
-import java.util.Optional;
 
 import java.util.List;
 
@@ -156,19 +156,34 @@ public class JobController {
         return ResponseEntity.noContent().build();
     }
 
-    // POST /api/jobs/{id}/mechanic-abandon — MECHANIC abandons active job, triggers rebroadcast
+    // POST /api/jobs/{id}/mechanic-abandon — MECHANIC abandons active job, triggers rebroadcast.
+    // Returns AbandonResponse: showOffer=true → show offer screen; false → suspended.
     @PostMapping("/{id}/mechanic-abandon")
-    public ResponseEntity<Void> mechanicAbandon(@PathVariable Long id) {
-        broadcastService.mechanicAbandon(id, getAccountId());
+    public ResponseEntity<AbandonResponse> mechanicAbandon(@PathVariable Long id) {
+        return ResponseEntity.ok(broadcastService.mechanicAbandon(id, getAccountId()));
+    }
+
+    // POST /api/jobs/{id}/mechanic-take-back — MECHANIC reclaims a job they just abandoned.
+    // 200 = success; 409 = already taken by someone else.
+    @PostMapping("/{id}/mechanic-take-back")
+    public ResponseEntity<Void> mechanicTakeBack(@PathVariable Long id) {
+        broadcastService.mechanicTakeBack(id, getAccountId());
+        return ResponseEntity.ok().build();
+    }
+
+    // POST /api/jobs/{id}/mechanic-move-on — MECHANIC permanently declines the abandoned job
+    // and gets notified about other nearby PENDING jobs.
+    @PostMapping("/{id}/mechanic-move-on")
+    public ResponseEntity<Void> mechanicMoveOn(@PathVariable Long id) {
+        broadcastService.mechanicMoveOn(id, getAccountId());
         return ResponseEntity.noContent().build();
     }
 
-    // GET /api/jobs/broadcast/pending — MECHANIC polls for their pending broadcast
+    // GET /api/jobs/broadcast/pending — MECHANIC polls for all pending broadcasts (multi-SOS).
+    // Always returns 200 with a list (empty = nothing pending).
     @GetMapping("/broadcast/pending")
-    public ResponseEntity<BroadcastJobResponse> getPendingBroadcast() {
-        return broadcastService.getPendingBroadcast(getAccountId())
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.noContent().build());
+    public ResponseEntity<List<BroadcastJobResponse>> getPendingBroadcast() {
+        return ResponseEntity.ok(broadcastService.getPendingBroadcast(getAccountId()));
     }
 
     // JWT helper

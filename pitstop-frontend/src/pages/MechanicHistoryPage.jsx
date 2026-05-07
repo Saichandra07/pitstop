@@ -7,6 +7,7 @@ import BottomNav from '../components/BottomNav';
 import Avatar from '../components/Avatar';
 import JobCard from '../components/JobCard';
 import BottomSheet from '../components/BottomSheet';
+import BroadcastOverlay from '../components/BroadcastOverlay';
 
 const NAV_H = 56;
 
@@ -136,6 +137,9 @@ export default function MechanicHistoryPage() {
       )}
 
       <BottomNav role="mechanic" active="history" />
+
+      {/* ── Global broadcast overlay ── */}
+      <BroadcastOverlay onAcceptSuccess={() => navigate('/mechanic/dashboard')} />
 
       {/* ── Logout sheet ── */}
       <BottomSheet isOpen={showLogout} onClose={() => setShowLogout(false)} title="Log out?">

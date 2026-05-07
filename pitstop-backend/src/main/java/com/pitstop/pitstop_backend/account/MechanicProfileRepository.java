@@ -14,6 +14,8 @@ public interface MechanicProfileRepository extends JpaRepository<MechanicProfile
 
     List<MechanicProfile> findByVerificationStatus(VerificationStatus status);
 
+    List<MechanicProfile> findByVerificationStatusAndSuspensionEndsAtBefore(VerificationStatus status, java.time.LocalDateTime cutoff);
+
     List<MechanicProfile> findAll();
 
     @Query("SELECT mp FROM MechanicProfile mp JOIN mp.account a WHERE LOWER(a.name) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(mp.area) LIKE LOWER(CONCAT('%', :query, '%'))")

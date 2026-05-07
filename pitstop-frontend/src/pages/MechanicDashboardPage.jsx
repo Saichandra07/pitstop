@@ -3,10 +3,12 @@ import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } fro
 const NavigationMap = lazy(() => import("../components/NavigationMap"));
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useBroadcast } from "../context/BroadcastContext";
 import api from "../api/axios";
 import BottomSheet from "../components/BottomSheet";
 import PitStopLogo from "../components/PitStopLogo";
 import Avatar from "../components/Avatar";
+import BroadcastOverlay from "../components/BroadcastOverlay";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -102,85 +104,6 @@ function SuspendedWall({ onLogout }) {
   );
 }
 
-const VEHICLE_EMOJIS = {
-  TWO_WHEELER: "🏍️", THREE_WHEELER: "🛺", FOUR_WHEELER: "🚗", SIX_PLUS_WHEELER: "🚛",
-};
-
-// ─── Job Request Card ─────────────────────────────────────────────────────────
-function JobRequestCard({ broadcast, onAccept, onDecline }) {
-  const deadline = useMemo(
-    () => new Date(broadcast.sentAt).getTime() + 90_000,
-    [broadcast.sentAt]
-  );
-  const [remaining, setRemaining] = useState(() => Math.max(0, Math.floor((deadline - Date.now()) / 1000)));
-
-  useEffect(() => {
-    if (remaining <= 0) { onDecline(broadcast.jobId); return; }
-    const id = setInterval(() => {
-      const r = Math.max(0, Math.floor((deadline - Date.now()) / 1000));
-      setRemaining(r);
-      if (r === 0) { clearInterval(id); onDecline(broadcast.jobId); }
-    }, 1000);
-    return () => clearInterval(id);
-  }, [deadline, broadcast.jobId, onDecline, remaining]);
-
-  const urgent = remaining <= 30;
-  const pct    = (remaining / 90) * 100;
-  const fmtLabel = (val) => (val || "—").replace(/_/g, " ").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-
-  return (
-    <div style={{ position:"absolute", inset:0, zIndex:50, background:"rgba(10,11,18,0.92)", backdropFilter:"blur(8px)", display:"flex", alignItems:"flex-end", padding:"0 0 72px" }}>
-      <div style={{ width:"100%", background:"var(--surface)", borderRadius:"22px 22px 0 0", overflow:"hidden", border:"1px solid rgba(255,183,0,0.3)", borderBottom:"none", boxShadow:"0 -8px 40px rgba(0,0,0,0.5)" }}>
-        {/* Gold top stripe */}
-        <div style={{ height:3, background: urgent ? "linear-gradient(90deg,var(--red),rgba(230,57,70,0.2))" : "linear-gradient(90deg,var(--gold),rgba(255,183,0,0.2))", transition:"background 0.3s" }} />
-
-        <div style={{ padding:"16px 16px 20px" }}>
-          {/* Header: badge + countdown */}
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-            <span className="ps-tag ps-tag-red" style={{ fontSize:9, letterSpacing:"1.5px" }}>● NEW SOS</span>
-            <div style={{ textAlign:"right" }}>
-              <div style={{ fontSize:30, fontWeight:800, color: urgent ? "var(--red)" : "var(--gold)", fontVariantNumeric:"tabular-nums", lineHeight:1, transition:"color 0.3s" }}>{remaining}s</div>
-              <div style={{ fontSize:9, color:"var(--text-3)", letterSpacing:"0.5px" }}>TO RESPOND</div>
-            </div>
-          </div>
-
-          {/* Timer bar */}
-          <div style={{ height:3, background:"var(--surface3)", borderRadius:2, marginBottom:14 }}>
-            <div style={{ height:"100%", width:`${pct}%`, borderRadius:2, background: urgent ? "var(--red)" : "var(--gold)", transition:"width 1s linear, background 0.3s" }} />
-          </div>
-
-          {/* Job info */}
-          <div style={{ display:"flex", gap:12, background:"var(--surface2)", borderRadius:12, padding:"12px", marginBottom:12, border:"1px solid var(--border)", alignItems:"center" }}>
-            <div style={{ width:46, height:46, borderRadius:12, background:"var(--surface3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, flexShrink:0 }}>
-              {VEHICLE_EMOJIS[broadcast.vehicleType] || "🚗"}
-            </div>
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontSize:14, fontWeight:700, color:"var(--text)", marginBottom:3 }}>{fmtLabel(broadcast.problemType)}</div>
-              <div style={{ fontSize:11, color:"var(--text-3)", marginBottom: broadcast.area ? 4 : 0 }}>{fmtLabel(broadcast.vehicleType)} · {broadcast.vehicleName || "—"}</div>
-              {broadcast.area && (
-                <div style={{ fontSize:11, color:"var(--text-2)", display:"flex", alignItems:"center", gap:4 }}>
-                  <span>📍</span>{broadcast.area}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Ring indicator */}
-          <div style={{ fontSize:10, color:"var(--text-3)", textAlign:"center", marginBottom:14, letterSpacing:"0.5px", textTransform:"uppercase" }}>
-            Ring {broadcast.broadcastRing} of 4 · Escalates if you don't respond
-          </div>
-
-          {/* Buttons */}
-          <div style={{ display:"flex", gap:10 }}>
-            <button onClick={() => onDecline(broadcast.jobId)} className="ps-btn-ghost" style={{ flex:1, height:48, fontSize:13 }}>Decline</button>
-            <button onClick={() => onAccept(broadcast.jobId)} className="ps-btn" style={{ flex:2, height:48, fontSize:14, fontWeight:700 }}>Accept ✓</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Map Background ───────────────────────────────────────────────────────────
 
 function MechanicMap({ hasActiveJob, isOnline }) {
@@ -247,26 +170,26 @@ function MechanicMap({ hasActiveJob, isOnline }) {
 
 export default function MechanicDashboardPage() {
   const { user, logout } = useAuth();
+  const { handleAbandon, clearBroadcastTracking } = useBroadcast();
   const navigate = useNavigate();
 
-  const [me, setMe]                             = useState(null);
-  const [loading, setLoading]                   = useState(true);
-  const [pendingJobs, setPendingJobs]           = useState([]);
-  const [activeJob, setActiveJob]               = useState(null);
-  const [mechCoords, setMechCoords]             = useState(null);
-  const [pendingBroadcast, setPendingBroadcast] = useState(null);
-  const [togglingAvail, setTogglingAvail]       = useState(false);
+  const [me, setMe]                           = useState(null);
+  const [loading, setLoading]                 = useState(true);
+  const [pendingJobs, setPendingJobs]         = useState([]);
+  const [activeJob, setActiveJob]             = useState(null);
+  const [mechCoords, setMechCoords]           = useState(null);
+  const [togglingAvail, setTogglingAvail]     = useState(false);
   const [activeJobLoading, setActiveJobLoading] = useState(false);
-  const [snackbar, setSnackbar]                 = useState(null);
-  const [showLogoutSheet, setShowLogoutSheet]   = useState(false);
-  const [showNotifSheet, setShowNotifSheet]     = useState(false);
+  const [snackbar, setSnackbar]               = useState(null);
+  const [showLogoutSheet, setShowLogoutSheet] = useState(false);
+  const [showNotifSheet, setShowNotifSheet]   = useState(false);
   const [notifPrefs, setNotifPrefs] = useState(() => {
     try { return JSON.parse(localStorage.getItem('pitstop_notif_prefs') || '{}'); }
     catch { return {}; }
   });
-  const snackbarTimer                           = useRef(null);
-  const prevActiveJobRef                        = useRef(null);
-  const expectingJobEndRef                      = useRef(false);
+  const snackbarTimer      = useRef(null);
+  const prevActiveJobRef   = useRef(null);
+  const expectingJobEndRef = useRef(false);
 
   const [jobCancelledByUser, setJobCancelledByUser] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(false);
@@ -301,6 +224,7 @@ export default function MechanicDashboardPage() {
       // Job disappeared without mechanic action → user cancelled mid-job
       if (prevActiveJobRef.current?.id && !job && !expectingJobEndRef.current) {
         setJobCancelledByUser(true);
+        fetchMe(); // refresh isAvailable — backend already set it to true
       }
       prevActiveJobRef.current = job;
       setActiveJob(job);
@@ -334,25 +258,6 @@ export default function MechanicDashboardPage() {
     return () => clearInterval(id);
   }, [activeJob?.id, fetchActiveJob]);
 
-  // Dismiss the cancel overlay once mechanic successfully goes back online
-  useEffect(() => {
-    if (jobCancelledByUser && me?.isAvailable) setJobCancelledByUser(false);
-  }, [me?.isAvailable, jobCancelledByUser]);
-
-  // Poll for broadcast every 5s when online — replaces manual job list with targeted push
-  useEffect(() => {
-    if (me?.verificationStatus !== "VERIFIED" || !me?.isAvailable) return;
-    const fetchBroadcast = async () => {
-      try {
-        const res = await api.get("/jobs/broadcast/pending");
-        setPendingBroadcast(res.status === 204 ? null : res.data);
-      } catch { setPendingBroadcast(null); }
-    };
-    fetchBroadcast();
-    const id = setInterval(fetchBroadcast, 5000);
-    return () => clearInterval(id);
-  }, [me?.isAvailable, me?.verificationStatus]);
-
   // ── Snackbar ───────────────────────────────────────────────────────────────
 
   function showSnackbar(message, type = "info") {
@@ -373,7 +278,7 @@ export default function MechanicDashboardPage() {
         await api.patch("/accounts/availability", { isAvailable: goingOnline, latitude, longitude });
         await fetchMe();
         if (goingOnline) fetchPendingJobs();
-        else setPendingBroadcast(null);
+        else clearBroadcastTracking();
       } catch (err) {
         const s = err.response?.status;
         if (s === 409)      showSnackbar("Complete your active job first", "warning");
@@ -399,27 +304,11 @@ export default function MechanicDashboardPage() {
     }
   }
 
-  async function handleAccept(jobId) {
-    try {
-      await api.post(`/jobs/${jobId}/accept`);
-      setPendingBroadcast(null);
-      await fetchMe();
-      await fetchActiveJob();
-      showSnackbar("Job accepted! Head to the user's location.", "success");
-    } catch (err) {
-      showSnackbar(err.response?.data?.message || "Could not accept job", "error");
-    }
-  }
-
-  async function handleDecline(jobId) {
-    try {
-      await api.post(`/jobs/${jobId}/decline`);
-      setPendingBroadcast(null);
-      showSnackbar("Job declined", "info");
-    } catch (err) {
-      showSnackbar(err.response?.data?.message || "Could not decline job", "error");
-    }
-  }
+  // Called by BroadcastOverlay after accept or take-back success — refreshes dashboard state
+  const onBroadcastAcceptSuccess = useCallback(async () => {
+    await fetchMe();
+    await fetchActiveJob();
+  }, [fetchMe, fetchActiveJob]);
 
   async function handleJobStatus(jobId, status) {
     setActiveJobLoading(true);
@@ -636,6 +525,16 @@ export default function MechanicDashboardPage() {
                   <PhoneIcon /> Call
                 </button>
               </div>
+              {/* Abandon — below main actions, smaller and muted so it's not accidentally tapped */}
+              <button
+                onClick={async () => {
+                  const result = await handleAbandon(activeJob.id);
+                  if (result) { await fetchMe(); await fetchActiveJob(); }
+                }}
+                style={{ marginTop: 8, width: "100%", background: "none", border: "none", color: "var(--text-3)", fontSize: 11, padding: "6px 0", cursor: "pointer", textDecoration: "underline", letterSpacing: "0.3px" }}
+              >
+                Abandon job
+              </button>
             </div>
           </>
         )}
@@ -742,45 +641,31 @@ export default function MechanicDashboardPage() {
         </div>
       )}
 
-      {/* ── User-cancelled overlay ── */}
+      {/* ── User-cancelled banner ── */}
       {jobCancelledByUser && !hasActiveJob && (
         <div style={{
-          position: "absolute", inset: 0, zIndex: 90,
-          background: "rgba(10,11,18,0.88)", backdropFilter: "blur(6px)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          padding: "0 24px",
+          position: "absolute", top: 72, left: 16, right: 16, zIndex: 70,
+          background: "var(--surface)", border: "1px solid rgba(255,183,0,0.35)",
+          borderRadius: 14, padding: "14px 16px",
+          display: "flex", alignItems: "flex-start", gap: 12,
+          boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
         }}>
-          <div className="ps-card" style={{ width: "100%", maxWidth: 340, padding: "28px 24px", textAlign: "center", border: "1px solid rgba(255,183,0,0.25)" }}>
-            {/* Icon */}
-            <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(255,183,0,0.1)", border: "1px solid rgba(255,183,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px" }}>
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="var(--gold)" strokeWidth="1.5" strokeLinejoin="round"/>
-                <path d="M12 9v4M12 16.5v.5" stroke="var(--gold)" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
-            </div>
-
-            <div style={{ fontSize: 17, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>
-              Job Cancelled
-            </div>
-            <div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.6, marginBottom: 28 }}>
-              The user cancelled the request before you arrived. Go online to receive new jobs.
-            </div>
-
-            <button
-              onClick={() => { setJobCancelledByUser(false); handleToggleAvailability(); }}
-              disabled={togglingAvail}
-              className="ps-btn"
-              style={{ marginBottom: 10, opacity: togglingAvail ? 0.6 : 1 }}
-            >
-              {togglingAvail ? "Getting location…" : "Go Online Again"}
-            </button>
-            <button
-              onClick={() => setJobCancelledByUser(false)}
-              className="ps-btn-ghost"
-            >
-              Stay Offline
-            </button>
+          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,183,0,0.1)", border: "1px solid rgba(255,183,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="var(--gold)" strokeWidth="1.5" strokeLinejoin="round"/>
+              <path d="M12 9v4M12 16.5v.5" stroke="var(--gold)" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
           </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 2 }}>Job cancelled by user</div>
+            <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>You're back online and ready for new requests.</div>
+          </div>
+          <button
+            onClick={() => setJobCancelledByUser(false)}
+            style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "0 0 0 4px", flexShrink: 0 }}
+          >
+            ×
+          </button>
         </div>
       )}
 
@@ -797,14 +682,8 @@ export default function MechanicDashboardPage() {
         </div>
       )}
 
-      {/* ── Job Request Card — broadcast overlay ── */}
-      {pendingBroadcast && !activeJob && (
-        <JobRequestCard
-          broadcast={pendingBroadcast}
-          onAccept={handleAccept}
-          onDecline={handleDecline}
-        />
-      )}
+      {/* ── Global broadcast overlay (SOS cards, cancelled card, abandon offer) ── */}
+      <BroadcastOverlay onAcceptSuccess={onBroadcastAcceptSuccess} />
 
       {/* ── Notification preferences sheet ── */}
       <BottomSheet isOpen={showNotifSheet} onClose={() => setShowNotifSheet(false)} title="Notifications">

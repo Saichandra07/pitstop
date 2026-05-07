@@ -56,6 +56,7 @@ public interface JobRepository extends JpaRepository<Job, Long> {
             AND NOT EXISTS (
                 SELECT 1 FROM job_broadcast jb
                 WHERE jb.job_id = j.id AND jb.mechanic_profile_id = :mechanicProfileId
+                AND jb.status IN ('SENT', 'DECLINED')
             )
             AND (6371 * acos(LEAST(1.0,
                 cos(radians(j.latitude)) * cos(radians(:lat))

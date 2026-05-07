@@ -475,13 +475,13 @@ function MechanicsTab() {
       {loading ? <Loader /> : !mechanics.length ? <Empty text="No mechanics found" /> :
         mechanics.map(m => {
           const st = m.verificationStatus;
-          const isOpen = expanded === m.id;
+          const isOpen = expanded === m.mechanicProfileId;
           const isSuspended = st === "SUSPENDED";
 
           return (
-            <ItemCard key={m.id} status={st}>
+            <ItemCard key={m.mechanicProfileId} status={st}>
               {/* Header row — tap to expand */}
-              <div className="adm-row" onClick={() => toggle(m.id)} style={{
+              <div className="adm-row" onClick={() => toggle(m.mechanicProfileId)} style={{
                 padding: "13px 14px", display: "flex", alignItems: "center", gap: 12,
               }}>
                 <Avatar name={m.name} size="sm" variant={isSuspended ? "red" : "muted"} />
@@ -526,25 +526,25 @@ function MechanicsTab() {
               <Slide open={isOpen}>
                 {isSuspended ? (
                   <BtnRow>
-                    <ABtn label="Unsuspend" color="green" onClick={() => unsuspend(m.id)} />
-                    <ABtn label="Delete" color="red" onClick={() => del(m.id)} />
+                    <ABtn label="Unsuspend" color="green" onClick={() => unsuspend(m.mechanicProfileId)} />
+                    <ABtn label="Delete" color="red" onClick={() => del(m.mechanicProfileId)} />
                   </BtnRow>
                 ) : (
                   <>
                     <Field
                       placeholder="Suspension reason…"
-                      value={suspendForm[m.id]?.reason || ""}
-                      onChange={e => setSuspendForm(p => ({ ...p, [m.id]: { ...p[m.id], reason: e.target.value } }))}
+                      value={suspendForm[m.mechanicProfileId]?.reason || ""}
+                      onChange={e => setSuspendForm(p => ({ ...p, [m.mechanicProfileId]: { ...p[m.mechanicProfileId], reason: e.target.value } }))}
                     />
                     <Field
                       type="number"
                       placeholder="Days (e.g. 3)"
-                      value={suspendForm[m.id]?.days || ""}
-                      onChange={e => setSuspendForm(p => ({ ...p, [m.id]: { ...p[m.id], days: e.target.value } }))}
+                      value={suspendForm[m.mechanicProfileId]?.days || ""}
+                      onChange={e => setSuspendForm(p => ({ ...p, [m.mechanicProfileId]: { ...p[m.mechanicProfileId], days: e.target.value } }))}
                     />
                     <BtnRow>
-                      <ABtn label="Suspend" color="gold" onClick={() => suspend(m.id)} />
-                      <ABtn label="Delete"  color="red"  onClick={() => del(m.id)} />
+                      <ABtn label="Suspend" color="gold" onClick={() => suspend(m.mechanicProfileId)} />
+                      <ABtn label="Delete"  color="red"  onClick={() => del(m.mechanicProfileId)} />
                     </BtnRow>
                   </>
                 )}

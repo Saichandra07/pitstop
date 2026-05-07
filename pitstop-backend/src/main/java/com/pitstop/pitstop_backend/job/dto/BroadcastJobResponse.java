@@ -16,5 +16,7 @@ public record BroadcastJobResponse(
         String address,
         String area,
         Integer broadcastRing,
-        LocalDateTime sentAt
+        LocalDateTime sentAt,
+        Double distanceKm,
+        Integer etaMinutes
 ) {}
