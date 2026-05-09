@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useActiveJob } from '../context/ActiveJobContext';
 import api from '../api/axios';
 import TopBar from '../components/TopBar';
 import BottomNav from '../components/BottomNav';
@@ -32,6 +33,7 @@ function groupByMonth(jobs) {
 export default function MechanicHistoryPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { activeJob } = useActiveJob();
 
   const [jobs, setJobs]             = useState([]);
   const [loading, setLoading]       = useState(true);
@@ -46,12 +48,14 @@ export default function MechanicHistoryPage() {
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
-  const grouped      = groupByMonth(jobs);
-  const monthKeys    = Object.keys(grouped);
-  const totalDone    = jobs.length;
+  const grouped           = groupByMonth(jobs);
+  const monthKeys         = Object.keys(grouped);
+  const totalDone         = jobs.length;
+  const currentMonthKey   = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+  const currentMonthCount = (grouped[currentMonthKey] || []).length;
 
   return (
-    <div style={{ minHeight: '100dvh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'var(--font)', paddingBottom: NAV_H + 16 }}>
+    <div style={{ minHeight: '100dvh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'var(--font)', paddingBottom: activeJob ? 128 : NAV_H + 16 }}>
 
       {/* ── TopBar ── */}
       <div style={{ borderBottom: '1px solid var(--border)', padding: '0 16px' }}>
@@ -86,32 +90,31 @@ export default function MechanicHistoryPage() {
       ) : (
         <div style={{ padding: '16px 16px 0' }}>
 
-          {/* ── Summary strip ── */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '12px 16px', marginBottom: 20 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,183,0,0.1)', border: '1px solid rgba(255,183,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <polyline points="20 6 9 17 4 12" stroke="var(--gold)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{totalDone} job{totalDone !== 1 ? 's' : ''} completed</div>
-              <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>Across {monthKeys.length} month{monthKeys.length !== 1 ? 's' : ''}</div>
+          {/* ── Top stat tiles ── */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+            {currentMonthCount > 0 && (
+              <div style={{ flex: 1, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 12px', textAlign: 'center' }}>
+                <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)' }}>{currentMonthCount}</div>
+                <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--text-3)', marginTop: 4 }}>This Month</div>
+              </div>
+            )}
+            <div style={{ flex: 1, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)' }}>{totalDone}</div>
+              <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--text-3)', marginTop: 4 }}>All Time</div>
             </div>
           </div>
 
           {/* ── Grouped job cards ── */}
-          {monthKeys.map((month, idx) => {
+          {monthKeys.map((month) => {
             const monthJobs = grouped[month];
             return (
               <div key={month} style={{ marginBottom: 24 }}>
 
-                {/* Month label — only shown when >1 month */}
-                {monthKeys.length > 1 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase' }}>{month}</span>
-                    <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{monthJobs.length} job{monthJobs.length !== 1 ? 's' : ''}</span>
-                  </div>
-                )}
+                {/* Month label */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase' }}>{month}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{monthJobs.length} job{monthJobs.length !== 1 ? 's' : ''}</span>
+                </div>
 
                 {/* Job cards */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -119,17 +122,6 @@ export default function MechanicHistoryPage() {
                     <JobCard key={job.id} job={job} />
                   ))}
                 </div>
-
-                {/* Month earnings card — only on first (most recent) month */}
-                {idx === 0 && (
-                  <div className="ps-earnings-card" style={{ marginTop: 10 }}>
-                    <p className="ps-earnings-label">This month</p>
-                    <p className="ps-earnings-amount">
-                      {monthJobs.length} <span style={{ fontSize: 14, fontWeight: 600 }}>job{monthJobs.length !== 1 ? 's' : ''}</span>
-                    </p>
-                    <p className="ps-earnings-meta">{monthJobs.length} completed · {month}</p>
-                  </div>
-                )}
               </div>
             );
           })}

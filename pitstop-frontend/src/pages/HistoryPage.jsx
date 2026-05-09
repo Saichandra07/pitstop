@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import { useActiveJob } from '../context/ActiveJobContext';
 import TopBar from '../components/TopBar';
 import BottomNav from '../components/BottomNav';
 import Avatar from '../components/Avatar';
@@ -23,6 +24,7 @@ function groupByMonth(jobs) {
 export default function HistoryPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { activeJob } = useActiveJob();
   const [jobs, setJobs]             = useState([]);
   const [loading, setLoading]       = useState(true);
   const [showLogout, setShowLogout] = useState(false);
@@ -45,7 +47,7 @@ export default function HistoryPage() {
   const monthCompleted = firstMonthJobs.filter(j => j.status === 'COMPLETED').length;
 
   return (
-    <div style={{ minHeight: '100dvh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'var(--font)', paddingBottom: NAV_H + 16 }}>
+    <div style={{ minHeight: '100dvh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'var(--font)', paddingBottom: activeJob ? 128 : NAV_H + 16 }}>
 
       {/* ── TopBar ── */}
       <div style={{ borderBottom: '1px solid var(--border)', padding: '0 16px' }}>

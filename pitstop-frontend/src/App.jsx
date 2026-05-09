@@ -2,6 +2,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import { useAuth } from './context/AuthContext';
 import { BroadcastProvider } from './context/BroadcastContext';
+import { ActiveJobProvider } from './context/ActiveJobContext';
+import ActiveJobFloat from './components/ActiveJobFloat';
+import RatingPrompt from './components/RatingPrompt';
 import RegisterPage from './pages/RegisterPage';
 import MechanicRegisterPage from './pages/MechanicRegisterPage';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -31,6 +34,9 @@ function App() {
   return (
     <BrowserRouter>
       <BroadcastProvider>
+      <ActiveJobProvider>
+      <ActiveJobFloat />
+      <RatingPrompt />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
@@ -113,6 +119,7 @@ function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
       </Routes>
+      </ActiveJobProvider>
       </BroadcastProvider>
     </BrowserRouter>
   )

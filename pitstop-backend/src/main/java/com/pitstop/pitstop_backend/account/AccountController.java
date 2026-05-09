@@ -5,6 +5,7 @@ import com.pitstop.pitstop_backend.account.dto.*;
 import com.pitstop.pitstop_backend.account.dto.AvailabilityRequest;
 import com.pitstop.pitstop_backend.auth.JwtUtil;
 import com.pitstop.pitstop_backend.common.dto.LoginResponse;
+import com.pitstop.pitstop_backend.job.JobService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,12 +29,19 @@ public class AccountController {
     private final AccountService accountService;
     private final JwtUtil jwtUtil;
     private final AccountRepository accountRepository;
+    private final JobService jobService;
 
-
-    public AccountController(AccountService accountService, JwtUtil jwtUtil, AccountRepository accountRepository){
+    public AccountController(AccountService accountService, JwtUtil jwtUtil, AccountRepository accountRepository, JobService jobService){
         this.accountService = accountService;
         this.jwtUtil = jwtUtil;
         this.accountRepository = accountRepository;
+        this.jobService = jobService;
+    }
+
+    @PostMapping("/auth/logout")
+    public ResponseEntity<Void> logout() {
+        jobService.cancelJobOnLogout(getAccountId());
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/auth/register")

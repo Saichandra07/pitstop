@@ -12,11 +12,16 @@ public class AccountMeResponse {
     private Boolean isAvailable;
     private String rejectionReason;
     private Boolean hasExpertise;  // null for USER, true/false for MECHANIC
+    private Double averageRating;  // null for USER, null until first review for MECHANIC
+    private Integer reviewCount;   // null for USER
+    private Integer totalJobsCompleted; // null for USER
 
     public AccountMeResponse(Long id, String name, String email, String role,
                              VerificationStatus verificationStatus,
                              Boolean isAvailable, String rejectionReason,
-                             Boolean hasExpertise) {
+                             Boolean hasExpertise,
+                             Double averageRating, Integer reviewCount,
+                             Integer totalJobsCompleted) {
         this.id = id;
         this.name = name;
         this.email = email;
@@ -25,6 +30,9 @@ public class AccountMeResponse {
         this.isAvailable = isAvailable;
         this.rejectionReason = rejectionReason;
         this.hasExpertise = hasExpertise;
+        this.averageRating = averageRating;
+        this.reviewCount = reviewCount;
+        this.totalJobsCompleted = totalJobsCompleted;
     }
 
     public Long getId() { return id; }
@@ -35,4 +43,7 @@ public class AccountMeResponse {
     public Boolean getIsAvailable() { return isAvailable; }
     public String getRejectionReason() { return rejectionReason; }
     public Boolean getHasExpertise() { return hasExpertise; }
+    public Double getAverageRating() { return averageRating; }
+    public Integer getReviewCount() { return reviewCount; }
+    public Integer getTotalJobsCompleted() { return totalJobsCompleted; }
 }

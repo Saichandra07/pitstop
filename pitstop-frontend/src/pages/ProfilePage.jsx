@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
 import TopBar from "../components/TopBar";
+import { useActiveJob } from "../context/ActiveJobContext";
 import BottomNav from "../components/BottomNav";
 import Avatar from "../components/Avatar";
 import StatGrid from "../components/StatGrid";
@@ -69,13 +70,13 @@ function MenuRow({ icon, label, onClick, danger }) {
 
 export default function ProfilePage() {
   const { user, logout, updateUser } = useAuth();
+  const { activeJob } = useActiveJob();
   const navigate = useNavigate();
 
   const isMechanic = user?.role === "MECHANIC";
 
   const [profile, setProfile]     = useState(null);
   const [history, setHistory]     = useState([]);
-  const [activeJob, setActiveJob] = useState(null);
   const [loading, setLoading]     = useState(true);
   const [editing, setEditing]     = useState(false);
   const [nameInput, setNameInput] = useState("");
@@ -90,12 +91,7 @@ export default function ProfilePage() {
         setProfile(meRes.data);
         setNameInput(meRes.data.name || "");
 
-        if (isMechanic) {
-          try {
-            const activeRes = await api.get("/jobs/mechanic/active");
-            setActiveJob(activeRes.data || null);
-          } catch { /* 204 No Content throws in axios — means no active job */ }
-        } else {
+        if (!isMechanic) {
           const histRes = await api.get("/jobs/my/history");
           setHistory(histRes.data || []);
         }
@@ -139,7 +135,11 @@ export default function ProfilePage() {
     }
   };
 
-  const handleLogout = () => { logout(); navigate("/login"); };
+  const handleLogout = async () => {
+    try { await api.post('/auth/logout', null, { timeout: 3000 }); } catch {}
+    logout();
+    navigate("/login");
+  };
 
   if (loading) {
     return (
@@ -163,12 +163,19 @@ export default function ProfilePage() {
   const nowLabel = activeJob ? "On Job" : (profile?.isAvailable ? "Online" : "Offline");
 
   const mechStats = [
-    { value: profile?.verificationStatus || "—", label: "Status" },
-    { value: nowLabel, label: "Now" },
+    {
+      value: profile?.averageRating != null
+        ? `⭐ ${profile.averageRating.toFixed(1)}`
+        : 'New',
+      label: 'Rating',
+    },
+    { value: profile?.totalJobsCompleted ?? 0, label: 'Jobs Done' },
+    { value: profile?.verificationStatus || '—', label: 'Status' },
+    { value: nowLabel, label: 'Now' },
   ];
 
   return (
-    <div style={{ minHeight: "100dvh", background: "var(--bg)", color: "var(--text)", fontFamily: "var(--font)", paddingBottom: 72 }}>
+    <div style={{ minHeight: "100dvh", background: "var(--bg)", color: "var(--text)", fontFamily: "var(--font)", paddingBottom: activeJob ? 128 : 72 }}>
 
       {/* ── TopBar ── */}
       <div style={{ borderBottom: "1px solid var(--border)", padding: "0 16px" }}>

@@ -169,7 +169,10 @@ public class BroadcastService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This is not your job");
         }
 
-        if (job.getStatus() != JobStatus.ACCEPTED && job.getStatus() != JobStatus.IN_PROGRESS) {
+        if (job.getStatus() != JobStatus.ACCEPTED &&
+                job.getStatus() != JobStatus.ARRIVAL_REQUESTED &&
+                job.getStatus() != JobStatus.IN_PROGRESS &&
+                job.getStatus() != JobStatus.COMPLETION_REQUESTED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Job is not active");
         }
 

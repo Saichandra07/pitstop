@@ -4,6 +4,7 @@ const NavigationMap = lazy(() => import("../components/NavigationMap"));
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useBroadcast } from "../context/BroadcastContext";
+import { useActiveJob } from "../context/ActiveJobContext";
 import api from "../api/axios";
 import BottomSheet from "../components/BottomSheet";
 import PitStopLogo from "../components/PitStopLogo";
@@ -19,6 +20,10 @@ const SHEET_EXPANDED  = 320;
 const VEHICLE_LABELS = {
   TWO_WHEELER: "2-Wheeler", THREE_WHEELER: "3-Wheeler",
   FOUR_WHEELER: "4-Wheeler", SIX_PLUS_WHEELER: "6-Wheeler+",
+};
+
+const VEHICLE_EMOJIS = {
+  TWO_WHEELER: "🏍️", THREE_WHEELER: "🛺", FOUR_WHEELER: "🚗", SIX_PLUS_WHEELER: "🚛",
 };
 
 const PROBLEM_LABELS = {
@@ -170,16 +175,15 @@ function MechanicMap({ hasActiveJob, isOnline }) {
 
 export default function MechanicDashboardPage() {
   const { user, logout } = useAuth();
-  const { handleAbandon, clearBroadcastTracking } = useBroadcast();
+  const { clearBroadcastTracking, broadcasts } = useBroadcast();
+  const { activeJob, jobCancelledByUser, setJobCancelledByUser, refetchActiveJob } = useActiveJob();
   const navigate = useNavigate();
 
   const [me, setMe]                           = useState(null);
   const [loading, setLoading]                 = useState(true);
   const [pendingJobs, setPendingJobs]         = useState([]);
-  const [activeJob, setActiveJob]             = useState(null);
   const [mechCoords, setMechCoords]           = useState(null);
   const [togglingAvail, setTogglingAvail]     = useState(false);
-  const [activeJobLoading, setActiveJobLoading] = useState(false);
   const [snackbar, setSnackbar]               = useState(null);
   const [showLogoutSheet, setShowLogoutSheet] = useState(false);
   const [showNotifSheet, setShowNotifSheet]   = useState(false);
@@ -187,11 +191,8 @@ export default function MechanicDashboardPage() {
     try { return JSON.parse(localStorage.getItem('pitstop_notif_prefs') || '{}'); }
     catch { return {}; }
   });
-  const snackbarTimer      = useRef(null);
-  const prevActiveJobRef   = useRef(null);
-  const expectingJobEndRef = useRef(false);
+  const snackbarTimer = useRef(null);
 
-  const [jobCancelledByUser, setJobCancelledByUser] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [dragging, setDragging]           = useState(false);
   const [dragStartY, setDragStartY]       = useState(null);
@@ -216,32 +217,13 @@ export default function MechanicDashboardPage() {
     catch { setPendingJobs([]); }
   }, []);
 
-  const fetchActiveJob = useCallback(async () => {
-    try {
-      const res = await api.get("/jobs/mechanic/active");
-      const job = res.data?.id ? res.data : null;
-
-      // Job disappeared without mechanic action → user cancelled mid-job
-      if (prevActiveJobRef.current?.id && !job && !expectingJobEndRef.current) {
-        setJobCancelledByUser(true);
-        fetchMe(); // refresh isAvailable — backend already set it to true
-      }
-      prevActiveJobRef.current = job;
-      setActiveJob(job);
-    } catch { setActiveJob(null); }
-  }, []);
-
   useEffect(() => { fetchMe(); }, [fetchMe]);
 
   useEffect(() => {
-    if (me?.verificationStatus === "VERIFIED") {
-      fetchActiveJob();
-      if (me.isAvailable) fetchPendingJobs();
-    }
-  }, [me, fetchPendingJobs, fetchActiveJob]);
+    if (me?.verificationStatus === "VERIFIED" && me.isAvailable) fetchPendingJobs();
+  }, [me, fetchPendingJobs]);
 
-  // Recover mechCoords after page refresh — mechanic is auto-offline during active job,
-  // so we cannot check isAvailable here. Check activeJob only.
+  // Recover mechCoords on active job — needs GPS to show navigation map
   useEffect(() => {
     if (activeJob && !mechCoords) {
       navigator.geolocation.getCurrentPosition(
@@ -251,12 +233,14 @@ export default function MechanicDashboardPage() {
     }
   }, [activeJob?.id, mechCoords]);
 
-  // Poll active job every 5s while one exists — picks up user cancellations
+  // Refresh mechanic availability display when job ends
+  const prevJobIdRef = useRef(undefined);
   useEffect(() => {
-    if (!activeJob) return;
-    const id = setInterval(fetchActiveJob, 5000);
-    return () => clearInterval(id);
-  }, [activeJob?.id, fetchActiveJob]);
+    if (prevJobIdRef.current !== undefined && prevJobIdRef.current !== null && !activeJob) {
+      fetchMe();
+    }
+    prevJobIdRef.current = activeJob?.id ?? null;
+  }, [activeJob, fetchMe]);
 
   // ── Snackbar ───────────────────────────────────────────────────────────────
 
@@ -307,26 +291,14 @@ export default function MechanicDashboardPage() {
   // Called by BroadcastOverlay after accept or take-back success — refreshes dashboard state
   const onBroadcastAcceptSuccess = useCallback(async () => {
     await fetchMe();
-    await fetchActiveJob();
-  }, [fetchMe, fetchActiveJob]);
+    await refetchActiveJob();
+  }, [fetchMe, refetchActiveJob]);
 
-  async function handleJobStatus(jobId, status) {
-    setActiveJobLoading(true);
-    try {
-      await api.patch(`/jobs/${jobId}/status`, { status });
-      await fetchMe();
-      expectingJobEndRef.current = true;
-      await fetchActiveJob();
-      if (status === "COMPLETED") showSnackbar("Job marked complete 🎉", "success");
-    } catch {
-      showSnackbar("Failed to update job status", "error");
-    } finally {
-      expectingJobEndRef.current = false;
-      setActiveJobLoading(false);
-    }
-  }
-
-  function handleLogout() { logout(); navigate("/login"); }
+  const handleLogout = async () => {
+    try { await api.post('/auth/logout', null, { timeout: 3000 }); } catch {}
+    logout();
+    navigate("/login");
+  };
 
   const togglePref = (key) => {
     const updated = { ...notifPrefs, [key]: !notifPrefs[key] };
@@ -367,7 +339,7 @@ export default function MechanicDashboardPage() {
   const hasActiveJob = !!activeJob;
 
   const idleSheetH    = liveSheetH !== null ? liveSheetH : snapHeight;
-  const currentSheetH = hasActiveJob ? 260 : idleSheetH;
+  const currentSheetH = (hasActiveJob || broadcasts.length > 0) ? 0 : idleSheetH;
   const snackbarColor = { warning: "var(--gold)", error: "var(--red)", success: "var(--green)", info: "var(--text-3)" }[snackbar?.type] ?? "var(--text-3)";
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -392,28 +364,6 @@ export default function MechanicDashboardPage() {
         <MechanicMap hasActiveJob={hasActiveJob} isOnline={isOnline} />
       )}
 
-      {/* ── Google Maps button — always visible when active job has user coords ── */}
-      {/* Uses destination-only URL so Google Maps uses device GPS as start point */}
-      {hasActiveJob && activeJob?.latitude && (
-        <button
-          onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${activeJob.latitude},${activeJob.longitude}&travelmode=driving&dir_action=navigate`, "_blank")}
-          style={{
-            position: "absolute", bottom: 330, right: 16, zIndex: 25,
-            display: "flex", alignItems: "center", gap: 6,
-            background: "rgba(12,14,22,0.92)", backdropFilter: "blur(6px)",
-            border: "1px solid rgba(255,183,0,0.35)", borderRadius: 9999,
-            padding: "9px 14px", cursor: "pointer",
-            color: "var(--gold)", fontSize: 12, fontWeight: 600,
-            boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-          }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke="#FFB700" strokeWidth="1.5"/>
-            <circle cx="12" cy="9" r="2.5" stroke="#FFB700" strokeWidth="1.5"/>
-          </svg>
-          Open in Google Maps
-        </button>
-      )}
 
       {/* ── TopBar ── */}
       <div style={{
@@ -480,64 +430,9 @@ export default function MechanicDashboardPage() {
         }}
       >
         {/* Drag handle */}
-        <div onClick={() => !hasActiveJob && setSheetExpanded(v => !v)} style={{ display: "flex", justifyContent: "center", paddingBottom: 12, cursor: hasActiveJob ? "default" : "pointer" }}>
+        <div onClick={() => setSheetExpanded(v => !v)} style={{ display: "flex", justifyContent: "center", paddingBottom: 12, cursor: "pointer" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--surface3)" }} />
         </div>
-
-        {/* ── Active job ── */}
-        {hasActiveJob && (
-          <>
-            <div className="ps-section-label">Active job</div>
-            <div className="ps-card ps-card-gold" style={{ padding: "12px 14px" }}>
-              {/* Header */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                <div style={{ flex: 1, minWidth: 0, marginRight: 10 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 3 }}>
-                    {PROBLEM_LABELS[activeJob.problemType] || activeJob.problemType}
-                  </div>
-                  <div style={{ fontSize: 11, color: "var(--text-3)" }}>
-                    {VEHICLE_LABELS[activeJob.vehicleType] || activeJob.vehicleType} · {activeJob.vehicleName}
-                  </div>
-                </div>
-                <span className={`ps-tag ${activeJob.status === "IN_PROGRESS" ? "ps-tag-green" : "ps-tag-gold"}`}>
-                  {activeJob.status === "ACCEPTED" ? "En route" : "In progress"}
-                </span>
-              </div>
-              {/* Next action hint */}
-              <div style={{ fontSize: 11, color: "var(--text-3)", background: "var(--surface)", borderRadius: 8, padding: "7px 10px", marginBottom: 10 }}>
-                {activeJob.status === "ACCEPTED"
-                  ? "📍 Navigate to user — tap Mark Arrived when you get there"
-                  : "🔧 Repair in progress — tap Mark Complete when done"}
-              </div>
-              {/* Actions */}
-              <div style={{ display: "flex", gap: 8 }}>
-                {activeJob.status === "ACCEPTED" && (
-                  <button onClick={() => handleJobStatus(activeJob.id, "IN_PROGRESS")} disabled={activeJobLoading} className="ps-btn-outline" style={{ flex: 2, height: 40, fontSize: 12, padding: 0, opacity: activeJobLoading ? 0.5 : 1 }}>
-                    Mark Arrived
-                  </button>
-                )}
-                {activeJob.status === "IN_PROGRESS" && (
-                  <button onClick={() => handleJobStatus(activeJob.id, "COMPLETED")} disabled={activeJobLoading} className="ps-btn" style={{ flex: 2, height: 40, fontSize: 12, padding: 0, opacity: activeJobLoading ? 0.5 : 1 }}>
-                    Mark Complete ✓
-                  </button>
-                )}
-                <button onClick={() => window.open("tel:", "_self")} className="ps-btn-ghost" style={{ flex: 1, height: 40, fontSize: 12, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                  <PhoneIcon /> Call
-                </button>
-              </div>
-              {/* Abandon — below main actions, smaller and muted so it's not accidentally tapped */}
-              <button
-                onClick={async () => {
-                  const result = await handleAbandon(activeJob.id);
-                  if (result) { await fetchMe(); await fetchActiveJob(); }
-                }}
-                style={{ marginTop: 8, width: "100%", background: "none", border: "none", color: "var(--text-3)", fontSize: 11, padding: "6px 0", cursor: "pointer", textDecoration: "underline", letterSpacing: "0.3px" }}
-              >
-                Abandon job
-              </button>
-            </div>
-          </>
-        )}
 
         {/* ── Online idle ── */}
         {isOnline && !hasActiveJob && (
@@ -621,7 +516,7 @@ export default function MechanicDashboardPage() {
                 <button
                   onClick={async () => {
                     try { await api.post(`/jobs/${activeJob.id}/mechanic-abandon`); } catch {}
-                    handleLogout();
+                    await handleLogout();
                   }}
                   style={{ width: "100%", background: "transparent", border: "none", color: "var(--red)", fontSize: 13, fontWeight: 500, padding: "10px 0", cursor: "pointer", opacity: 0.7 }}
                 >

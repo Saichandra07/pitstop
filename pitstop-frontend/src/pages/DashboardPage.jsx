@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useActiveJob } from "../context/ActiveJobContext";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
@@ -11,21 +12,11 @@ import BottomSheet from "../components/BottomSheet";
 import Badge from "../components/Badge";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const ACTIVE_STATUSES = ["PENDING", "ACCEPTED", "IN_PROGRESS"];
 const NAV_H           = 56;
 const SHEET_COLLAPSED = 128;   // SOS button (64) + strip (~44) + padding
 const SHEET_EXPANDED  = 340;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function statusInfo(status) {
-  switch (status) {
-    case "PENDING":     return { label: "Searching...", variant: "gold"  };
-    case "ACCEPTED":    return { label: "En route",     variant: "green" };
-    case "IN_PROGRESS": return { label: "In progress",  variant: "green" };
-    default:            return { label: status,          variant: "dim"   };
-  }
-}
-
 function jobStatusVariant(status) {
   switch (status) {
     case "COMPLETED":  return "green";
@@ -57,12 +48,6 @@ const BellIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" stroke="var(--gold)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
     <path d="M13.73 21a2 2 0 0 1-3.46 0" stroke="var(--gold)" strokeWidth="1.5" strokeLinecap="round"/>
-  </svg>
-);
-
-const PhoneIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.5 2 2 0 0 1 3.6 1.3h3a2 2 0 0 1 2 1.72c.127.96.36 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.07 6.07l.96-.96a2 2 0 0 1 2.11-.45c.907.34 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
   </svg>
 );
 
@@ -200,10 +185,9 @@ function ActiveMap() {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const { user, logout } = useAuth();
+  const { activeJob, cancelledJob, setCancelledJob } = useActiveJob();
   const navigate = useNavigate();
 
-  const [activeJob, setActiveJob]             = useState(null);
-  const [cancelledJob, setCancelledJob]       = useState(null);
   const [history, setHistory]                 = useState([]);
   const [sheetExpanded, setSheetExpanded]     = useState(false);
   const [loading, setLoading]                 = useState(true);
@@ -217,45 +201,6 @@ export default function DashboardPage() {
   const [dragStartY, setDragStartY]           = useState(null);
   const [dragStartH, setDragStartH]           = useState(null);
   const [liveSheetH, setLiveSheetH]           = useState(null);
-  const [rebroadcastBanner, setRebroadcastBanner] = useState(false);
-
-  const prevStatusRef = useRef(null);
-
-  const fetchActive = useCallback(async () => {
-    try {
-      const res  = await api.get("/jobs/my/active");
-      const jobs = res.data;
-      const found = Array.isArray(jobs)
-        ? jobs.find((j) => ACTIVE_STATUSES.includes(j.status))
-        : ACTIVE_STATUSES.includes(jobs?.status) ? jobs : null;
-
-      // Detect system cancellation: was PENDING, now gone → check history for reason
-      if (!found && prevStatusRef.current === "PENDING") {
-        try {
-          const histRes = await api.get("/jobs/my/history");
-          const recent = (histRes.data || [])[0];
-          if (recent?.status === "CANCELLED" &&
-              recent.cancellationReason &&
-              recent.cancellationReason !== "USER_CANCELLED") {
-            setCancelledJob(recent);
-          }
-        } catch {}
-      }
-
-      // Mechanic abandoned: was ACCEPTED/IN_PROGRESS, now PENDING → show banner
-      if (found?.status === "PENDING" &&
-          (prevStatusRef.current === "ACCEPTED" || prevStatusRef.current === "IN_PROGRESS")) {
-        setRebroadcastBanner(true);
-      }
-      // Clear banner once job leaves PENDING or disappears
-      if (prevStatusRef.current === "PENDING" && (!found || found.status !== "PENDING")) {
-        setRebroadcastBanner(false);
-      }
-
-      prevStatusRef.current = found?.status ?? null;
-      setActiveJob(found || null);
-    } catch { setActiveJob(null); }
-  }, []);
 
   const fetchHistory = useCallback(async () => {
     try {
@@ -267,33 +212,25 @@ export default function DashboardPage() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      await Promise.all([fetchActive(), fetchHistory()]);
+      await fetchHistory();
       setLoading(false);
     })();
-  }, [fetchActive, fetchHistory]);
+  }, [fetchHistory]);
 
-  // Poll every 5s for any active job — catches status changes from either side
+  // Refresh history when job ends (context sets activeJob to null)
+  const prevJobIdRef = useRef(undefined);
   useEffect(() => {
-    if (!activeJob || !ACTIVE_STATUSES.includes(activeJob.status)) return;
-    const id = setInterval(fetchActive, 5000);
-    return () => clearInterval(id);
-  }, [activeJob?.status, fetchActive]);
-
-  const handleCancel = async (jobId, status) => {
-    if (status === "ACCEPTED") {
-      const ok = window.confirm("A mechanic is already on the way. Cancel anyway?");
-      if (!ok) return;
-    }
-    try {
-      await api.patch(`/jobs/${jobId}/cancel`);
-      setActiveJob(null);
+    if (prevJobIdRef.current !== undefined && prevJobIdRef.current !== null && !activeJob) {
       fetchHistory();
-    } catch (err) {
-      alert(err.response?.data?.message || "Could not cancel job.");
     }
-  };
+    prevJobIdRef.current = activeJob?.id ?? null;
+  }, [activeJob, fetchHistory]);
 
-  const handleLogout = () => { logout(); navigate("/login"); };
+  const handleLogout = async () => {
+    try { await api.post('/auth/logout', null, { timeout: 3000 }); } catch {}
+    logout();
+    navigate("/login");
+  };
 
   const togglePref = (key) => {
     const updated = { ...notifPrefs, [key]: !notifPrefs[key] };
@@ -306,17 +243,11 @@ export default function DashboardPage() {
   function moveDrag(y)  { if (!dragging || dragStartY === null) return; const d = dragStartY - y; setLiveSheetH(Math.min(SHEET_EXPANDED, Math.max(SHEET_COLLAPSED, dragStartH + d))); }
   function endDrag(y)   { if (!dragging) return; const d = dragStartY - y; if (d > 40) setSheetExpanded(true); else if (d < -40) setSheetExpanded(false); setLiveSheetH(null); setDragging(false); setDragStartY(null); setDragStartH(null); }
 
-  const firstName    = user?.name?.split(" ")[0] || "there";
-  const hasActiveJob = !!activeJob;
-  const si           = activeJob ? statusInfo(activeJob.status) : null;
+  const firstName       = user?.name?.split(" ")[0] || "there";
+  const hasActiveJob    = !!activeJob;
 
-  const idleSheetH      = liveSheetH !== null ? liveSheetH : (sheetExpanded ? SHEET_EXPANDED : SHEET_COLLAPSED);
-  // "auto" lets the card grow to its content — avoids clipping when content exceeds a fixed value.
-  // mapBottomOffset needs a numeric estimate because "auto" + NAV_H is not valid math.
-  const activeSheetH    = hasActiveJob ? "auto" : idleSheetH;
-  const mapBottomOffset = (hasActiveJob
-    ? (activeJob.status === "PENDING" ? 248 : 280)
-    : idleSheetH) + NAV_H;
+  const idleSheetH      = hasActiveJob ? 0 : (liveSheetH !== null ? liveSheetH : (sheetExpanded ? SHEET_EXPANDED : SHEET_COLLAPSED));
+  const mapBottomOffset = idleSheetH + NAV_H;
 
   return (
     <div
@@ -372,25 +303,23 @@ export default function DashboardPage() {
         onMouseDown={(e)  => startDrag(e.clientY)}
         style={{
           position:"absolute", left:0, right:0, bottom:NAV_H,
-          height: activeSheetH,
+          height: idleSheetH,
           background:"var(--bg)",
           borderRadius:"24px 24px 0 0",
           padding:"10px 16px 16px",
-          zIndex:20, overflow: hasActiveJob ? "visible" : "hidden",
+          zIndex:20, overflow:"hidden",
           transition: dragging ? "none" : "height 0.35s cubic-bezier(0.32,0.72,0,1)",
           boxShadow:"0 -1px 0 0 var(--border)",
           userSelect:"none", cursor: dragging ? "grabbing" : "default",
         }}
       >
         {/* Drag handle */}
-        {!hasActiveJob && (
-          <div onClick={() => setSheetExpanded(v => !v)} style={{ display:"flex", justifyContent:"center", paddingBottom:10, cursor:"pointer" }}>
-            <div style={{ width:36, height:4, borderRadius:2, background:"var(--surface3)" }} />
-          </div>
-        )}
+        <div onClick={() => setSheetExpanded(v => !v)} style={{ display:"flex", justifyContent:"center", paddingBottom:10, cursor:"pointer" }}>
+          <div style={{ width:36, height:4, borderRadius:2, background:"var(--surface3)" }} />
+        </div>
 
         {/* ── Idle state ── */}
-        {!hasActiveJob && (
+        {(
           <>
             {/* SOS button */}
             <button
@@ -439,74 +368,6 @@ export default function DashboardPage() {
           </>
         )}
 
-        {/* ── Active job card ── */}
-        {hasActiveJob && (
-          <div style={{ background:"var(--surface)", border:"1px solid rgba(255,183,0,0.3)", borderRadius:16, padding:14 }}>
-            <div style={{ fontSize:10, color:"var(--text-3)", letterSpacing:"1px", textTransform:"uppercase", fontWeight:600, marginBottom:10 }}>
-              Active request
-            </div>
-
-            {/* Mechanic-abandoned banner */}
-            {rebroadcastBanner && (
-              <div style={{ display:"flex", alignItems:"center", gap:8, background:"rgba(230,57,70,0.08)", border:"1px solid rgba(230,57,70,0.2)", borderRadius:10, padding:"8px 12px", marginBottom:10 }}>
-                <span style={{ fontSize:12 }}>⚠️</span>
-                <span style={{ fontSize:12, color:"var(--text-2)" }}>
-                  Previous mechanic couldn't continue. Finding a new one...
-                </span>
-              </div>
-            )}
-
-            {/* PENDING — ring broadcast progress */}
-            {activeJob.status === "PENDING" && (
-              <div style={{ display:"flex", alignItems:"center", gap:12, background:"var(--surface2)", borderRadius:12, padding:"10px 12px", marginBottom:12 }}>
-                <div style={{ width:8, height:8, borderRadius:"50%", background:"var(--gold)", flexShrink:0, boxShadow:"0 0 8px rgba(255,183,0,0.6)", animation:"psGoldPulse 1.4s ease-in-out infinite" }} />
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:"var(--gold)" }}>
-                    Ring {activeJob.broadcastRing ?? 1} of 4
-                  </div>
-                  <div style={{ fontSize:11, color:"var(--text-3)", marginTop:2 }}>
-                    Searching mechanics {["within 2km","2–5 km away","5–10 km away","10–20 km away"][(activeJob.broadcastRing ?? 1) - 1]}
-                  </div>
-                </div>
-                <Badge variant="gold">{si.label}</Badge>
-              </div>
-            )}
-
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
-              <div>
-                <div style={{ fontSize:15, fontWeight:600, color:"var(--text)" }}>{fmtProblem(activeJob.problemType)}</div>
-                <div style={{ fontSize:12, color:"var(--text-3)", marginTop:3 }}>{activeJob.vehicleType?.replace(/_/g," ")} · {activeJob.vehicleName}</div>
-              </div>
-              {activeJob.status !== "PENDING" && <Badge variant={si.variant}>{si.label}</Badge>}
-            </div>
-
-            {(activeJob.status === "ACCEPTED" || activeJob.status === "IN_PROGRESS") && (
-              <div style={{ display:"flex", alignItems:"center", gap:10, background:"rgba(74,222,128,0.07)", border:"1px solid rgba(74,222,128,0.2)", borderRadius:12, padding:"10px 12px", marginBottom:10 }}>
-                <div style={{ width:8, height:8, borderRadius:"50%", background:"var(--green)", flexShrink:0, boxShadow:"0 0 8px rgba(74,222,128,0.6)" }} />
-                <div>
-                  <div style={{ fontSize:13, fontWeight:600, color:"var(--green)" }}>
-                    {activeJob.status === "IN_PROGRESS" ? "Mechanic arrived" : "Mechanic on the way"}
-                  </div>
-                  <div style={{ fontSize:11, color:"var(--text-3)", marginTop:2 }}>
-                    {activeJob.status === "IN_PROGRESS" ? "Working on your vehicle" : "Live tracking coming soon"}
-                  </div>
-                </div>
-              </div>
-            )}
-            <div style={{ display:"flex", gap:8 }}>
-              {(activeJob.status === "ACCEPTED" || activeJob.status === "IN_PROGRESS") && (
-                <button style={{ flex:1, height:40, borderRadius:10, background:"rgba(74,222,128,0.1)", border:"1px solid rgba(74,222,128,0.2)", color:"var(--green)", fontSize:12, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:5 }}>
-                  <PhoneIcon /> Call mechanic
-                </button>
-              )}
-              {(activeJob.status === "PENDING" || activeJob.status === "ACCEPTED") && (
-                <button onClick={() => handleCancel(activeJob.id, activeJob.status)} style={{ flex:1, height:40, borderRadius:10, background:"transparent", border:"1px solid var(--border)", color:"var(--text-3)", fontSize:12, cursor:"pointer" }}>
-                  Cancel
-                </button>
-              )}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ── Bottom Nav ── */}

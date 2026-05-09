@@ -24,13 +24,21 @@ public class JobResponseDto {
     private LocalDateTime updatedAt;
     private Integer broadcastRing;
     private CancellationReason cancellationReason;
+    private String mechanicName;
+    private String mechanicPhone;
+    private Double mechanicRating;
+    private Integer mechanicReviewCount;
+    private String userName;
 
     public JobResponseDto(Long id, Long accountId, Long mechanicProfileId,
                           JobStatus status, VehicleType vehicleType, ProblemType problemType,
                           String vehicleName, String photoUrl,
                           String address, String description, Double latitude, Double longitude,
                           LocalDateTime createdAt, LocalDateTime updatedAt, Integer broadcastRing,
-                          CancellationReason cancellationReason) {
+                          CancellationReason cancellationReason,
+                          String mechanicName, String mechanicPhone,
+                          Double mechanicRating, Integer mechanicReviewCount,
+                          String userName) {
         this.id = id;
         this.accountId = accountId;
         this.mechanicProfileId = mechanicProfileId;
@@ -47,6 +55,11 @@ public class JobResponseDto {
         this.updatedAt = updatedAt;
         this.broadcastRing = broadcastRing;
         this.cancellationReason = cancellationReason;
+        this.mechanicName = mechanicName;
+        this.mechanicPhone = mechanicPhone;
+        this.mechanicRating = mechanicRating;
+        this.mechanicReviewCount = mechanicReviewCount;
+        this.userName = userName;
     }
 
     public Long getId() { return id; }
@@ -65,4 +78,9 @@ public class JobResponseDto {
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public Integer getBroadcastRing() { return broadcastRing; }
     public CancellationReason getCancellationReason() { return cancellationReason; }
+    public String getMechanicName() { return mechanicName; }
+    public String getMechanicPhone() { return mechanicPhone; }
+    public Double getMechanicRating() { return mechanicRating; }
+    public Integer getMechanicReviewCount() { return mechanicReviewCount; }
+    public String getUserName() { return userName; }
 }

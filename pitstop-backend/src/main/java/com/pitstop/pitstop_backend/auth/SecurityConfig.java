@@ -76,8 +76,15 @@ public class SecurityConfig {
                         // ── USER only ───────────────────────────────────────────────
                         // Submit SOS
                         .requestMatchers(HttpMethod.POST, "/api/jobs/sos").hasRole("USER")
+                        // Submit a review after job completion
+                        .requestMatchers(HttpMethod.POST, "/api/jobs/*/review").hasRole("USER")
                         // Cancel their own job
                         .requestMatchers(HttpMethod.PATCH, "/api/jobs/*/cancel").hasRole("USER")
+                        // Mutual confirmation — user confirms or rejects mechanic's status requests
+                        .requestMatchers(HttpMethod.POST, "/api/jobs/*/confirm-arrival").hasRole("USER")
+                        .requestMatchers(HttpMethod.POST, "/api/jobs/*/reject-arrival").hasRole("USER")
+                        .requestMatchers(HttpMethod.POST, "/api/jobs/*/confirm-complete").hasRole("USER")
+                        .requestMatchers(HttpMethod.POST, "/api/jobs/*/reject-complete").hasRole("USER")
                         // Their job feeds
                         .requestMatchers(HttpMethod.GET, "/api/jobs/my/**").hasRole("USER")
 

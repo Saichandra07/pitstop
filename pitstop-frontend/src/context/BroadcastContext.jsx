@@ -79,7 +79,7 @@ export function BroadcastProvider({ children }) {
       const status = err.response?.status;
       if (status === 409 || status === 403 || status === 404) {
         setBroadcasts(prev => prev.filter(b => b.broadcastId !== broadcastId));
-        showSnackbar("Job is no longer available", "warning");
+        setBroadcastCancelledByUser(true);
       } else {
         showSnackbar(err.response?.data?.message || "Could not accept job", "error");
       }

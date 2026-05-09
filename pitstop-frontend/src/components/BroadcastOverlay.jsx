@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useBroadcast } from "../context/BroadcastContext";
+import { useActiveJob } from "../context/ActiveJobContext";
 
 const NAV_H = 56;
 
@@ -265,6 +266,7 @@ export default function BroadcastOverlay({ onAcceptSuccess }) {
     handleAccept, handleDecline,
     handleTakeBack, handleMoveOn,
   } = useBroadcast();
+  const { activeJob } = useActiveJob();
 
   const [expanded, setExpanded] = useState(false);
 
@@ -299,6 +301,9 @@ export default function BroadcastOverlay({ onAcceptSuccess }) {
   if (broadcastCancelledByUser && broadcasts.length === 0) {
     return <BroadcastCancelledCard onDismiss={() => setBroadcastCancelledByUser(false)} />;
   }
+
+  // Mechanic already on a job — ActiveJobFloat owns this space
+  if (activeJob) return null;
 
   // No broadcasts
   if (broadcasts.length === 0) return null;

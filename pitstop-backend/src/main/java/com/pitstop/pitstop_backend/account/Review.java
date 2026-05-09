@@ -11,6 +11,10 @@ public class Review {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // Which job this review is for
+    @Column(nullable = true)
+    private Long jobId;
+
     // Which mechanic is being reviewed
     @Column(nullable = false)
     private Long mechanicId;
@@ -18,6 +22,10 @@ public class Review {
     // Who submitted the review — NULL if system-generated penalty review
     @Column(nullable = true)
     private Long reviewerId;
+
+    // Comma-separated quick tags (e.g. "Arrived fast,Professional")
+    @Column(nullable = true)
+    private String tags;
 
     // 1-5 stars
     @Column(nullable = false)
@@ -48,6 +56,9 @@ public class Review {
 
     public Long getId() { return id; }
 
+    public Long getJobId() { return jobId; }
+    public void setJobId(Long jobId) { this.jobId = jobId; }
+
     public Long getMechanicId() { return mechanicId; }
     public void setMechanicId(Long mechanicId) { this.mechanicId = mechanicId; }
 
@@ -65,6 +76,9 @@ public class Review {
 
     public String getReason() { return reason; }
     public void setReason(String reason) { this.reason = reason; }
+
+    public String getTags() { return tags; }
+    public void setTags(String tags) { this.tags = tags; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

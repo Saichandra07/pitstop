@@ -298,7 +298,10 @@ public class AccountService {
                     profile.getVerificationStatus(),
                     profile.getIsAvailable(),
                     profile.getRejectionReason(),
-                    hasExpertise
+                    hasExpertise,
+                    profile.getAverageRating(),
+                    profile.getReviewCount(),
+                    profile.getTotalJobsCompleted()
             );
         }
 
@@ -307,7 +310,7 @@ public class AccountService {
                 account.getName(),
                 account.getEmail(),
                 account.getRole().name(),
-                null, null, null, null  // USER — no mechanic fields
+                null, null, null, null, null, null, null  // USER — no mechanic fields
         );
     }
 

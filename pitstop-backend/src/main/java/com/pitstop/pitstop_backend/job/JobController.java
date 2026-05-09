@@ -5,6 +5,8 @@ import com.pitstop.pitstop_backend.job.dto.AdminJobResponse;
 import com.pitstop.pitstop_backend.job.dto.BroadcastJobResponse;
 import com.pitstop.pitstop_backend.job.dto.JobResponseDto;
 import com.pitstop.pitstop_backend.job.dto.SosRequestDto;
+import com.pitstop.pitstop_backend.review.ReviewService;
+import com.pitstop.pitstop_backend.review.dto.ReviewRequestDto;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,12 +25,14 @@ public class JobController {
     private final JobService jobService;
     private final CloudinaryService cloudinaryService;
     private final BroadcastService broadcastService;
+    private final ReviewService reviewService;
 
     public JobController(JobService jobService, CloudinaryService cloudinaryService,
-                         BroadcastService broadcastService) {
+                         BroadcastService broadcastService, ReviewService reviewService) {
         this.jobService = jobService;
         this.cloudinaryService = cloudinaryService;
         this.broadcastService = broadcastService;
+        this.reviewService = reviewService;
     }
 
     // POST /api/jobs/sos — USER only (SecurityConfig)
@@ -179,11 +183,43 @@ public class JobController {
         return ResponseEntity.noContent().build();
     }
 
+    // POST /api/jobs/{id}/confirm-arrival — USER confirms mechanic has arrived (ARRIVAL_REQUESTED → IN_PROGRESS)
+    @PostMapping("/{id}/confirm-arrival")
+    public ResponseEntity<JobResponseDto> confirmArrival(@PathVariable Long id) {
+        return ResponseEntity.ok(jobService.confirmArrival(id, getAccountId()));
+    }
+
+    // POST /api/jobs/{id}/reject-arrival — USER says mechanic isn't here yet (ARRIVAL_REQUESTED → ACCEPTED)
+    @PostMapping("/{id}/reject-arrival")
+    public ResponseEntity<JobResponseDto> rejectArrival(@PathVariable Long id) {
+        return ResponseEntity.ok(jobService.rejectArrival(id, getAccountId()));
+    }
+
+    // POST /api/jobs/{id}/confirm-complete — USER confirms job is done (COMPLETION_REQUESTED → COMPLETED)
+    @PostMapping("/{id}/confirm-complete")
+    public ResponseEntity<JobResponseDto> confirmComplete(@PathVariable Long id) {
+        return ResponseEntity.ok(jobService.confirmComplete(id, getAccountId()));
+    }
+
+    // POST /api/jobs/{id}/reject-complete — USER says job isn't done yet (COMPLETION_REQUESTED → IN_PROGRESS)
+    @PostMapping("/{id}/reject-complete")
+    public ResponseEntity<JobResponseDto> rejectComplete(@PathVariable Long id) {
+        return ResponseEntity.ok(jobService.rejectComplete(id, getAccountId()));
+    }
+
     // GET /api/jobs/broadcast/pending — MECHANIC polls for all pending broadcasts (multi-SOS).
     // Always returns 200 with a list (empty = nothing pending).
     @GetMapping("/broadcast/pending")
     public ResponseEntity<List<BroadcastJobResponse>> getPendingBroadcast() {
         return ResponseEntity.ok(broadcastService.getPendingBroadcast(getAccountId()));
+    }
+
+    // POST /api/jobs/{id}/review — USER only (SecurityConfig)
+    @PostMapping("/{id}/review")
+    public ResponseEntity<Void> submitReview(@PathVariable Long id,
+                                             @Valid @RequestBody ReviewRequestDto dto) {
+        reviewService.submitReview(id, getAccountId(), dto);
+        return ResponseEntity.ok().build();
     }
 
     // JWT helper

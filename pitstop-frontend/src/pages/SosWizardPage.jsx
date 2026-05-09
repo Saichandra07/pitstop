@@ -6,6 +6,7 @@ import api from "../api/axios";
 import TopBar from "../components/TopBar";
 import OptionCard from "../components/OptionCard";
 import ProgressBar from "../components/ProgressBar";
+import { useActiveJob } from "../context/ActiveJobContext";
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -109,6 +110,12 @@ function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
 
 export default function SOSWizardPage() {
   const navigate = useNavigate();
+  const { activeJob, refetchActiveJob } = useActiveJob();
+
+  // Guard: if an active job exists (or appears mid-wizard), go back to dashboard
+  useEffect(() => {
+    if (activeJob) navigate("/dashboard", { replace: true });
+  }, [activeJob, navigate]);
 
   const [step, setStep]   = useState(1);
   const [draft, setDraft] = useState(loadDraft);
@@ -190,10 +197,14 @@ export default function SOSWizardPage() {
         photoUrl:    photoUrl || null,
       });
       clearDraft();
+      // Populate context before navigating — float appears instantly, no gap
+      await refetchActiveJob();
       navigate("/dashboard");
+      // Component unmounts on navigate; no need to reset submitting on success
     } catch (err) {
       setError(err.response?.data?.message || "Failed to send SOS. Please try again.");
-    } finally { setSubmitting(false); }
+      setSubmitting(false);
+    }
   }
 
   function handleCancel() { clearDraft(); navigate("/dashboard"); }
@@ -211,6 +222,34 @@ export default function SOSWizardPage() {
   );
 
   // ─── Render ───────────────────────────────────────────────────────────────
+
+  // Full-screen loading overlay while SOS is submitting + fetching active job.
+  // Blocks all interaction so nothing can be tapped during the transition.
+  if (submitting) {
+    return (
+      <div style={{
+        position: "fixed", inset: 0, zIndex: 200,
+        background: "var(--bg)",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", gap: 16,
+      }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: "50%",
+          background: "rgba(230,57,70,0.1)", border: "1.5px solid var(--red)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <polygon points="13,2 3,14 12,14 11,22 21,10 12,10"
+              stroke="var(--red)" strokeWidth="2" strokeLinejoin="round" fill="none"/>
+          </svg>
+        </div>
+        <div className="ps-spinner" />
+        <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: 0 }}>Sending SOS…</p>
+        <p style={{ fontSize: 12, color: "var(--text-3)", margin: 0 }}>Finding mechanics near you</p>
+      </div>
+    );
+  }
+
   return (
     <div className="ps-screen" style={{ paddingBottom: 0, overflow: "hidden", height: "100dvh" }}>
 

@@ -79,6 +79,14 @@ public class MechanicProfile {
     @Column(nullable = true)
     private Double lastKnownLongitude;
 
+    // Rating stats — updated on every review submission
+    @Column(nullable = true)
+    private Double averageRating;
+
+    // nullable=true so Hibernate can add this column to the existing table via ddl-auto=update
+    @Column(nullable = true)
+    private Integer reviewCount = 0;
+
     @PrePersist
     protected void onCreate() {
         if (this.verificationStatus == null) {
@@ -154,4 +162,10 @@ public class MechanicProfile {
 
     public Double getLastKnownLongitude() { return lastKnownLongitude; }
     public void setLastKnownLongitude(Double lastKnownLongitude) { this.lastKnownLongitude = lastKnownLongitude; }
+
+    public Double getAverageRating() { return averageRating; }
+    public void setAverageRating(Double averageRating) { this.averageRating = averageRating; }
+
+    public Integer getReviewCount() { return reviewCount; }
+    public void setReviewCount(Integer reviewCount) { this.reviewCount = reviewCount; }
 }

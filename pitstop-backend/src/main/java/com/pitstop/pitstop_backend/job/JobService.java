@@ -40,6 +40,25 @@ public class JobService {
     // ── Mapping ────────────────────────────────────────────────────────────────
 
     private JobResponseDto toDto(Job job) {
+        String mechanicName = null;
+        String mechanicPhone = null;
+        Double mechanicRating = null;
+        Integer mechanicReviewCount = null;
+
+        if (job.getMechanicProfileId() != null) {
+            MechanicProfile mp = mechanicProfileRepository
+                    .findById(job.getMechanicProfileId()).orElse(null);
+            if (mp != null) {
+                mechanicName        = mp.getAccount().getName();
+                mechanicPhone       = mp.getPhone();
+                mechanicRating      = mp.getAverageRating();
+                mechanicReviewCount = mp.getReviewCount();
+            }
+        }
+
+        String userName = accountRepository.findById(job.getAccountId())
+                .map(Account::getName).orElse(null);
+
         return new JobResponseDto(
                 job.getId(),
                 job.getAccountId(),
@@ -56,7 +75,12 @@ public class JobService {
                 job.getCreatedAt(),
                 job.getUpdatedAt(),
                 job.getBroadcastRing(),
-                job.getCancellationReason()
+                job.getCancellationReason(),
+                mechanicName,
+                mechanicPhone,
+                mechanicRating,
+                mechanicReviewCount,
+                userName
         );
     }
 
@@ -164,7 +188,9 @@ public class JobService {
     public List<JobResponseDto> getActiveJobs(Long accountId) {
         return jobRepository.findByAccountIdAndStatusIn(
                         accountId,
-                        List.of(JobStatus.PENDING, JobStatus.ACCEPTED, JobStatus.IN_PROGRESS))
+                        List.of(JobStatus.PENDING, JobStatus.ACCEPTED,
+                                JobStatus.ARRIVAL_REQUESTED, JobStatus.IN_PROGRESS,
+                                JobStatus.COMPLETION_REQUESTED))
                 .stream().map(this::toDto).collect(Collectors.toList());
     }
 
@@ -223,7 +249,8 @@ public class JobService {
 
         return jobRepository.findByMechanicProfileIdAndStatusIn(
                         profile.getId(),
-                        List.of(JobStatus.ACCEPTED, JobStatus.IN_PROGRESS))
+                        List.of(JobStatus.ACCEPTED, JobStatus.ARRIVAL_REQUESTED,
+                                JobStatus.IN_PROGRESS, JobStatus.COMPLETION_REQUESTED))
                 .stream().map(this::toDto).findFirst();
     }
 
@@ -275,7 +302,8 @@ public class JobService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You don't own this job");
         }
 
-        if (job.getStatus() == JobStatus.IN_PROGRESS) {
+        if (job.getStatus() == JobStatus.IN_PROGRESS ||
+                job.getStatus() == JobStatus.COMPLETION_REQUESTED) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Cannot cancel a job that is already in progress");
         }
@@ -323,9 +351,10 @@ public class JobService {
         }
 
         JobStatus current = job.getStatus();
+        // Mechanic pushes to the _REQUESTED states; user confirms or rejects from there.
         boolean valid = switch (current) {
-            case ACCEPTED -> newStatus == JobStatus.IN_PROGRESS;
-            case IN_PROGRESS -> newStatus == JobStatus.COMPLETED;
+            case ACCEPTED    -> newStatus == JobStatus.ARRIVAL_REQUESTED;
+            case IN_PROGRESS -> newStatus == JobStatus.COMPLETION_REQUESTED;
             default -> false;
         };
 
@@ -335,21 +364,101 @@ public class JobService {
         }
 
         job.setStatus(newStatus);
+        job.setUpdatedAt(LocalDateTime.now());
         jobRepository.save(job);
 
-        // Mechanic marks COMPLETE → auto online, restore last known location,
-        // then treat like newly-online so nearby PENDING jobs reach them immediately.
-        if (newStatus == JobStatus.COMPLETED) {
-            profile.setIsAvailable(true);
-            profile.setLatitude(profile.getLastKnownLatitude());
-            profile.setLongitude(profile.getLastKnownLongitude());
-            mechanicProfileRepository.save(profile);
-            if (profile.getLatitude() != null && profile.getLongitude() != null) {
-                broadcastService.notifyNewlyOnlineMechanic(profile);
+        return toDto(jobRepository.findById(job.getId()).orElse(job));
+    }
+
+    // ── Logout cleanup ─────────────────────────────────────────────────────────
+
+    // Called when a user logs out. Cancels any live job and restores the mechanic
+    // if one was already assigned, so they don't get stuck mid-job.
+    public void cancelJobOnLogout(Long accountId) {
+        List<Job> activeJobs = jobRepository.findByAccountIdAndStatusIn(
+                accountId,
+                List.of(JobStatus.PENDING, JobStatus.ACCEPTED,
+                        JobStatus.ARRIVAL_REQUESTED, JobStatus.IN_PROGRESS,
+                        JobStatus.COMPLETION_REQUESTED)
+        );
+        for (Job job : activeJobs) {
+            jobBroadcastRepository.expireAllSentForJob(job.getId());
+            job.setStatus(JobStatus.CANCELLED);
+            job.setCancellationReason(CancellationReason.USER_CANCELLED);
+            jobRepository.save(job);
+            if (job.getMechanicProfileId() != null) {
+                mechanicProfileRepository.findById(job.getMechanicProfileId()).ifPresent(mp -> {
+                    mp.setIsAvailable(true);
+                    mp.setLatitude(mp.getLastKnownLatitude());
+                    mp.setLongitude(mp.getLastKnownLongitude());
+                    mechanicProfileRepository.save(mp);
+                });
             }
         }
+    }
 
-        return toDto(jobRepository.findById(job.getId()).orElse(job));
+    // ── User confirmations ─────────────────────────────────────────────────────
+
+    // User confirms mechanic has arrived: ARRIVAL_REQUESTED → IN_PROGRESS
+    public JobResponseDto confirmArrival(Long jobId, Long accountId) {
+        Job job = findJobOrThrow(jobId);
+        if (!job.getAccountId().equals(accountId))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your job");
+        if (job.getStatus() != JobStatus.ARRIVAL_REQUESTED)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Job is not awaiting arrival confirmation");
+        job.setStatus(JobStatus.IN_PROGRESS);
+        job.setUpdatedAt(LocalDateTime.now());
+        return toDto(jobRepository.save(job));
+    }
+
+    // User rejects arrival claim: ARRIVAL_REQUESTED → ACCEPTED (mechanic not close enough yet)
+    public JobResponseDto rejectArrival(Long jobId, Long accountId) {
+        Job job = findJobOrThrow(jobId);
+        if (!job.getAccountId().equals(accountId))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your job");
+        if (job.getStatus() != JobStatus.ARRIVAL_REQUESTED)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Job is not awaiting arrival confirmation");
+        job.setStatus(JobStatus.ACCEPTED);
+        job.setUpdatedAt(LocalDateTime.now());
+        return toDto(jobRepository.save(job));
+    }
+
+    // User confirms job is done: COMPLETION_REQUESTED → COMPLETED; mechanic auto-online
+    public JobResponseDto confirmComplete(Long jobId, Long accountId) {
+        Job job = findJobOrThrow(jobId);
+        if (!job.getAccountId().equals(accountId))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your job");
+        if (job.getStatus() != JobStatus.COMPLETION_REQUESTED)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Job is not awaiting completion confirmation");
+        job.setStatus(JobStatus.COMPLETED);
+        job.setUpdatedAt(LocalDateTime.now());
+        jobRepository.save(job);
+
+        // Restore mechanic online at last known location and notify them of nearby pending jobs
+        if (job.getMechanicProfileId() != null) {
+            mechanicProfileRepository.findById(job.getMechanicProfileId()).ifPresent(mp -> {
+                mp.setIsAvailable(true);
+                mp.setLatitude(mp.getLastKnownLatitude());
+                mp.setLongitude(mp.getLastKnownLongitude());
+                mechanicProfileRepository.save(mp);
+                if (mp.getLatitude() != null && mp.getLongitude() != null) {
+                    broadcastService.notifyNewlyOnlineMechanic(mp);
+                }
+            });
+        }
+        return toDto(jobRepository.findById(jobId).orElse(job));
+    }
+
+    // User rejects completion claim: COMPLETION_REQUESTED → IN_PROGRESS (work not done yet)
+    public JobResponseDto rejectComplete(Long jobId, Long accountId) {
+        Job job = findJobOrThrow(jobId);
+        if (!job.getAccountId().equals(accountId))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your job");
+        if (job.getStatus() != JobStatus.COMPLETION_REQUESTED)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Job is not awaiting completion confirmation");
+        job.setStatus(JobStatus.IN_PROGRESS);
+        job.setUpdatedAt(LocalDateTime.now());
+        return toDto(jobRepository.save(job));
     }
 
     // ── Delete ─────────────────────────────────────────────────────────────────
