@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "./AuthContext";
+import { useWebSocket } from "./WebSocketContext";
 import api from "../api/axios";
 
 const ActiveJobContext = createContext();
@@ -8,6 +9,7 @@ const ACTIVE_STATUSES = ["PENDING", "ACCEPTED", "ARRIVAL_REQUESTED", "IN_PROGRES
 
 export function ActiveJobProvider({ children }) {
   const { user } = useAuth();
+  const { subscribe } = useWebSocket();
   const role = user?.role;
 
   const [activeJob, setActiveJob]                       = useState(null);
@@ -95,13 +97,22 @@ export function ActiveJobProvider({ children }) {
     }
   }, [role]);
 
-  // Initial fetch + 5s poll (always, so the float stays current on any page)
+  // Initial fetch + 30s fallback poll (safety net when WS drops silently)
   useEffect(() => {
     if (!role || role === "ADMIN") return;
     fetchActiveJob();
-    const id = setInterval(fetchActiveJob, 5000);
+    const id = setInterval(fetchActiveJob, 30000);
     return () => clearInterval(id);
   }, [role, fetchActiveJob]);
+
+  // WebSocket subscription — trigger immediate refetch on any job-update event
+  useEffect(() => {
+    if (!user?.id || !role || role === "ADMIN") return;
+    const unsub = subscribe(`/topic/account/${user.id}/job-update`, () => {
+      fetchActiveJob();
+    });
+    return () => unsub?.();
+  }, [user?.id, role, subscribe, fetchActiveJob]);
 
   const handleJobStatus = useCallback(async (jobId, status) => {
     setActiveJobLoading(true);

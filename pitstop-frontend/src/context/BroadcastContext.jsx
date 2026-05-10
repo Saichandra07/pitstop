@@ -1,16 +1,17 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "./AuthContext";
+import { useWebSocket } from "./WebSocketContext";
 import api from "../api/axios";
 
 const BroadcastContext = createContext();
 
 export function BroadcastProvider({ children }) {
   const { user } = useAuth();
+  const { subscribe } = useWebSocket();
 
-  const [broadcasts, setBroadcasts]                         = useState([]);
-  const [broadcastCancelledByUser, setBroadcastCancelledByUser] = useState(false);
-  const [abandonedJobOffer, setAbandonedJobOffer]           = useState(null);
-  const [snackbar, setSnackbar]                             = useState(null);
+  const [broadcasts, setBroadcasts]         = useState([]);
+  const [abandonedJobOffer, setAbandonedJobOffer] = useState(null);
+  const [snackbar, setSnackbar]             = useState(null);
 
   const receivedAtsRef = useRef({});  // { [broadcastId]: timestamp }
   const mechActedRef   = useRef({});  // { [broadcastId]: true }
@@ -22,48 +23,57 @@ export function BroadcastProvider({ children }) {
     snackbarTimer.current = setTimeout(() => setSnackbar(null), 3000);
   }, []);
 
-  // Poll for broadcasts every 5s. Backend returns empty list when mechanic is offline/on-job.
+  const poll = useCallback(async () => {
+    if (user?.role !== "MECHANIC") return;
+    try {
+      const res      = await api.get("/jobs/broadcast/pending");
+      const incoming = res.data || [];
+      const newIds   = new Set(incoming.map(b => b.broadcastId));
+
+      // Detect broadcasts that disappeared without mechanic action → user cancelled
+      for (const prevId of Object.keys(receivedAtsRef.current).map(Number)) {
+        if (!newIds.has(prevId) && !mechActedRef.current[prevId]) {
+          showSnackbar("An SOS request was withdrawn by the user", "info");
+        }
+      }
+
+      // Preserve existing receivedAt timestamps; anchor new ones to sentAt from server
+      // so the timer is based on broadcast creation time, not when the frontend first saw it.
+      const nextAts = {};
+      for (const b of incoming) {
+        nextAts[b.broadcastId] = receivedAtsRef.current[b.broadcastId] ?? new Date(b.sentAt).getTime();
+      }
+      receivedAtsRef.current = nextAts;
+
+      // Prune mechActed to only current broadcasts
+      const nextActed = {};
+      for (const b of incoming) {
+        if (mechActedRef.current[b.broadcastId]) nextActed[b.broadcastId] = true;
+      }
+      mechActedRef.current = nextActed;
+
+      setBroadcasts(incoming.map(b => ({ ...b, _receivedAt: nextAts[b.broadcastId] })));
+    } catch {
+      setBroadcasts([]);
+    }
+  }, [user?.role]);
+
+  // Initial fetch + 30s fallback poll (safety net when WS drops silently)
   useEffect(() => {
     if (user?.role !== "MECHANIC") return;
-
-    const poll = async () => {
-      try {
-        const res      = await api.get("/jobs/broadcast/pending");
-        const incoming = res.data || [];
-        const newIds   = new Set(incoming.map(b => b.broadcastId));
-
-        // Detect broadcasts that disappeared without mechanic action → user cancelled
-        for (const prevId of Object.keys(receivedAtsRef.current).map(Number)) {
-          if (!newIds.has(prevId) && !mechActedRef.current[prevId]) {
-            setBroadcastCancelledByUser(true);
-          }
-        }
-
-        // Preserve existing receivedAt timestamps; anchor new ones to sentAt from server
-        // so the timer is based on broadcast creation time, not when the frontend first saw it.
-        const nextAts = {};
-        for (const b of incoming) {
-          nextAts[b.broadcastId] = receivedAtsRef.current[b.broadcastId] ?? new Date(b.sentAt).getTime();
-        }
-        receivedAtsRef.current = nextAts;
-
-        // Prune mechActed to only current broadcasts
-        const nextActed = {};
-        for (const b of incoming) {
-          if (mechActedRef.current[b.broadcastId]) nextActed[b.broadcastId] = true;
-        }
-        mechActedRef.current = nextActed;
-
-        setBroadcasts(incoming.map(b => ({ ...b, _receivedAt: nextAts[b.broadcastId] })));
-      } catch {
-        setBroadcasts([]);
-      }
-    };
-
     poll();
-    const id = setInterval(poll, 5000);
+    const id = setInterval(poll, 30000);
     return () => clearInterval(id);
-  }, [user?.role]);
+  }, [user?.role, poll]);
+
+  // WebSocket subscription — trigger immediate poll on any broadcast event
+  useEffect(() => {
+    if (!user?.id || user?.role !== "MECHANIC") return;
+    const unsub = subscribe(`/topic/account/${user.id}/broadcast`, () => {
+      poll();
+    });
+    return () => unsub?.();
+  }, [user?.id, user?.role, subscribe, poll]);
 
   const handleAccept = useCallback(async (jobId, broadcastId, onSuccess) => {
     mechActedRef.current[broadcastId] = true;
@@ -79,7 +89,7 @@ export function BroadcastProvider({ children }) {
       const status = err.response?.status;
       if (status === 409 || status === 403 || status === 404) {
         setBroadcasts(prev => prev.filter(b => b.broadcastId !== broadcastId));
-        setBroadcastCancelledByUser(true);
+        showSnackbar("This request is no longer available", "info");
       } else {
         showSnackbar(err.response?.data?.message || "Could not accept job", "error");
       }
@@ -149,7 +159,6 @@ export function BroadcastProvider({ children }) {
   return (
     <BroadcastContext.Provider value={{
       broadcasts,
-      broadcastCancelledByUser, setBroadcastCancelledByUser,
       abandonedJobOffer, setAbandonedJobOffer,
       snackbar,
       handleAccept, handleDecline,

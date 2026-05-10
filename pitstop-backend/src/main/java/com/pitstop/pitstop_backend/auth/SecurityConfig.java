@@ -44,7 +44,8 @@ public class SecurityConfig {
                                         "/api/admin/setup",
                                         "/api/auth/forgot-password",
                                         "/api/auth/reset-password",
-                                        "/api/auth/verify-email"
+                                        "/api/auth/verify-email",
+                                        "/ws/**"   // SockJS WebSocket handshake
                                 ).permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
 // ... other rules
@@ -105,7 +106,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(List.of("http://localhost:5173"));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
 

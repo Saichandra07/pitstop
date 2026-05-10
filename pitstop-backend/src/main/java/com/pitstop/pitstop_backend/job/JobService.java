@@ -1,6 +1,7 @@
 package com.pitstop.pitstop_backend.job;
 
 import com.pitstop.pitstop_backend.account.*;
+import com.pitstop.pitstop_backend.config.WebSocketEventPublisher;
 import com.pitstop.pitstop_backend.exception.ResourceNotFoundException;
 import com.pitstop.pitstop_backend.job.dto.AdminJobResponse;
 import com.pitstop.pitstop_backend.job.dto.JobResponseDto;
@@ -8,6 +9,7 @@ import com.pitstop.pitstop_backend.job.dto.SosRequestDto;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
@@ -26,6 +28,8 @@ public class JobService {
     private AccountRepository accountRepository;
     @Autowired
     private BroadcastService broadcastService;
+    @Autowired
+    private WebSocketEventPublisher wsPublisher;
 
     public JobService(JobRepository jobRepository,
                       MechanicProfileRepository mechanicProfileRepository,
@@ -286,7 +290,9 @@ public class JobService {
         job.setMechanicProfileId(profile.getId());
         job.setStatus(JobStatus.ACCEPTED);
 
-        return toDto(jobRepository.save(job));
+        JobResponseDto dto = toDto(jobRepository.save(job));
+        wsPublisher.publishJobUpdate(job.getAccountId(), profile.getAccount().getId(), dto);
+        return dto;
     }
 
     // ── Status Transitions ─────────────────────────────────────────────────────
@@ -313,6 +319,14 @@ public class JobService {
                     "Job is already " + job.getStatus());
         }
 
+        // Collect mechanics who currently have SENT broadcasts for this job BEFORE expiring.
+        // For PENDING jobs these are the mechanics seeing this job in their BroadcastOverlay —
+        // they need a WS ping so their poll() fires immediately and their overlay clears.
+        List<Long> broadcastMechanicProfileIds = (job.getStatus() == JobStatus.PENDING)
+                ? jobBroadcastRepository.findByJobIdAndStatus(jobId, JobBroadcastStatus.SENT)
+                        .stream().map(JobBroadcast::getMechanicProfileId).collect(Collectors.toList())
+                : List.of();
+
         // Expire any SENT broadcasts so mechanics stop seeing this job immediately
         jobBroadcastRepository.expireAllSentForJob(jobId);
 
@@ -322,16 +336,32 @@ public class JobService {
 
         // If a mechanic was already assigned, automatically bring them back online
         // using the location snapshot saved at accept time.
+        Long mechanicAccountId = null;
         if (job.getMechanicProfileId() != null) {
-            mechanicProfileRepository.findById(job.getMechanicProfileId()).ifPresent(mp -> {
+            MechanicProfile mp = mechanicProfileRepository.findById(job.getMechanicProfileId()).orElse(null);
+            if (mp != null) {
                 mp.setIsAvailable(true);
                 mp.setLatitude(mp.getLastKnownLatitude());
                 mp.setLongitude(mp.getLastKnownLongitude());
                 mechanicProfileRepository.save(mp);
-            });
+                mechanicAccountId = mp.getAccount().getId();
+            }
         }
 
-        return toDto(jobRepository.findById(job.getId()).orElse(job));
+        JobResponseDto dto = toDto(jobRepository.findById(job.getId()).orElse(job));
+        // Notify the user (always) and assigned mechanic if any (ACCEPTED cancellation)
+        wsPublisher.publishJobUpdate(job.getAccountId(), mechanicAccountId, dto);
+
+        // For PENDING cancellation: ping every mechanic who had this job in their overlay.
+        // Their poll() fires immediately, gets empty list, and cancel detection clears the card.
+        for (Long profileId : broadcastMechanicProfileIds) {
+            Long mechAccId = mechAccountId(profileId);
+            if (mechAccId != null) {
+                wsPublisher.publishBroadcast(mechAccId, java.util.Map.of("type", "BROADCAST_CANCELLED"));
+            }
+        }
+
+        return dto;
     }
 
     // Issue #11 — mechanic ownership check added
@@ -367,13 +397,17 @@ public class JobService {
         job.setUpdatedAt(LocalDateTime.now());
         jobRepository.save(job);
 
-        return toDto(jobRepository.findById(job.getId()).orElse(job));
+        JobResponseDto dto = toDto(jobRepository.findById(job.getId()).orElse(job));
+        // Mechanic triggered this — push to user so their UI updates immediately.
+        wsPublisher.publishJobUpdate(job.getAccountId(), null, dto);
+        return dto;
     }
 
     // ── Logout cleanup ─────────────────────────────────────────────────────────
 
-    // Called when a user logs out. Cancels any live job and restores the mechanic
-    // if one was already assigned, so they don't get stuck mid-job.
+    // Called when a user logs out. Cancels any live job, restores the mechanic
+    // if one was assigned, and fires WS events so both sides update immediately.
+    @Transactional
     public void cancelJobOnLogout(Long accountId) {
         List<Job> activeJobs = jobRepository.findByAccountIdAndStatusIn(
                 accountId,
@@ -382,17 +416,41 @@ public class JobService {
                         JobStatus.COMPLETION_REQUESTED)
         );
         for (Job job : activeJobs) {
+            // For PENDING jobs: collect which mechanics currently see this job in their overlay
+            // BEFORE we expire the broadcasts (after = too late to query who was SENT).
+            List<Long> broadcastMechanicProfileIds = (job.getStatus() == JobStatus.PENDING)
+                    ? jobBroadcastRepository.findByJobIdAndStatus(job.getId(), JobBroadcastStatus.SENT)
+                            .stream().map(JobBroadcast::getMechanicProfileId).collect(Collectors.toList())
+                    : List.of();
+
             jobBroadcastRepository.expireAllSentForJob(job.getId());
             job.setStatus(JobStatus.CANCELLED);
             job.setCancellationReason(CancellationReason.USER_CANCELLED);
             jobRepository.save(job);
+
+            // Restore mechanic online if one was assigned
+            Long mechanicAccountId = null;
             if (job.getMechanicProfileId() != null) {
-                mechanicProfileRepository.findById(job.getMechanicProfileId()).ifPresent(mp -> {
+                MechanicProfile mp = mechanicProfileRepository.findById(job.getMechanicProfileId()).orElse(null);
+                if (mp != null) {
                     mp.setIsAvailable(true);
                     mp.setLatitude(mp.getLastKnownLatitude());
                     mp.setLongitude(mp.getLastKnownLongitude());
                     mechanicProfileRepository.save(mp);
-                });
+                    mechanicAccountId = mp.getAccount().getId();
+                }
+            }
+
+            JobResponseDto dto = toDto(jobRepository.findById(job.getId()).orElse(job));
+            // Push CANCELLED status to user (always) and assigned mechanic if any
+            wsPublisher.publishJobUpdate(job.getAccountId(), mechanicAccountId, dto);
+
+            // For PENDING: ping every mechanic who had this job in their broadcast overlay
+            for (Long profileId : broadcastMechanicProfileIds) {
+                Long mechAccId = mechAccountId(profileId);
+                if (mechAccId != null) {
+                    wsPublisher.publishBroadcast(mechAccId, java.util.Map.of("type", "BROADCAST_CANCELLED"));
+                }
             }
         }
     }
@@ -408,7 +466,11 @@ public class JobService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Job is not awaiting arrival confirmation");
         job.setStatus(JobStatus.IN_PROGRESS);
         job.setUpdatedAt(LocalDateTime.now());
-        return toDto(jobRepository.save(job));
+        JobResponseDto dto = toDto(jobRepository.save(job));
+        // User confirmed — push to mechanic so they see IN_PROGRESS immediately.
+        Long mechanicAccId = mechAccountId(job.getMechanicProfileId());
+        wsPublisher.publishJobUpdate(job.getAccountId(), mechanicAccId, dto);
+        return dto;
     }
 
     // User rejects arrival claim: ARRIVAL_REQUESTED → ACCEPTED (mechanic not close enough yet)
@@ -420,7 +482,10 @@ public class JobService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Job is not awaiting arrival confirmation");
         job.setStatus(JobStatus.ACCEPTED);
         job.setUpdatedAt(LocalDateTime.now());
-        return toDto(jobRepository.save(job));
+        JobResponseDto dto = toDto(jobRepository.save(job));
+        Long mechanicAccId = mechAccountId(job.getMechanicProfileId());
+        wsPublisher.publishJobUpdate(job.getAccountId(), mechanicAccId, dto);
+        return dto;
     }
 
     // User confirms job is done: COMPLETION_REQUESTED → COMPLETED; mechanic auto-online
@@ -435,18 +500,24 @@ public class JobService {
         jobRepository.save(job);
 
         // Restore mechanic online at last known location and notify them of nearby pending jobs
+        Long mechanicAccId = null;
         if (job.getMechanicProfileId() != null) {
-            mechanicProfileRepository.findById(job.getMechanicProfileId()).ifPresent(mp -> {
+            MechanicProfile mp = mechanicProfileRepository.findById(job.getMechanicProfileId()).orElse(null);
+            if (mp != null) {
                 mp.setIsAvailable(true);
                 mp.setLatitude(mp.getLastKnownLatitude());
                 mp.setLongitude(mp.getLastKnownLongitude());
                 mechanicProfileRepository.save(mp);
+                mechanicAccId = mp.getAccount().getId();
                 if (mp.getLatitude() != null && mp.getLongitude() != null) {
                     broadcastService.notifyNewlyOnlineMechanic(mp);
                 }
-            });
+            }
         }
-        return toDto(jobRepository.findById(jobId).orElse(job));
+        JobResponseDto dto = toDto(jobRepository.findById(jobId).orElse(job));
+        // User confirmed completion — push to mechanic so they see COMPLETED immediately.
+        wsPublisher.publishJobUpdate(job.getAccountId(), mechanicAccId, dto);
+        return dto;
     }
 
     // User rejects completion claim: COMPLETION_REQUESTED → IN_PROGRESS (work not done yet)
@@ -458,7 +529,10 @@ public class JobService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Job is not awaiting completion confirmation");
         job.setStatus(JobStatus.IN_PROGRESS);
         job.setUpdatedAt(LocalDateTime.now());
-        return toDto(jobRepository.save(job));
+        JobResponseDto dto = toDto(jobRepository.save(job));
+        Long mechanicAccId = mechAccountId(job.getMechanicProfileId());
+        wsPublisher.publishJobUpdate(job.getAccountId(), mechanicAccId, dto);
+        return dto;
     }
 
     // ── Delete ─────────────────────────────────────────────────────────────────
@@ -467,10 +541,18 @@ public class JobService {
         jobRepository.delete(findJobOrThrow(id));
     }
 
-    // ── Internal helper ────────────────────────────────────────────────────────
+    // ── Internal helpers ───────────────────────────────────────────────────────
 
     private Job findJobOrThrow(Long id) {
         return jobRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Job not found with id " + id));
+    }
+
+    // Resolves the accountId of the mechanic assigned to a job (for WS topic routing).
+    private Long mechAccountId(Long mechanicProfileId) {
+        if (mechanicProfileId == null) return null;
+        return mechanicProfileRepository.findById(mechanicProfileId)
+                .map(mp -> mp.getAccount().getId())
+                .orElse(null);
     }
 }

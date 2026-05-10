@@ -1,4 +1,5 @@
 import { createContext, useState, useContext } from "react";
+import api from "../api/axios";
 const AuthContext = createContext();
 
 export const AuthProvider = ({children}) =>{
@@ -18,12 +19,17 @@ export const AuthProvider = ({children}) =>{
     setUser(data);
 };
 
-    const logout = () => {
+    const logout = async () => {
+        try {
+            await api.post('/jobs/logout'); // must run before token is cleared (needs valid JWT)
+        } catch {
+            // best-effort — proceed with local logout even if the call fails
+        }
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setToken(null);
         setUser(null);
-    }
+    };
 
     const updateUser = (partial) => {
         const updated = { ...user, ...partial };

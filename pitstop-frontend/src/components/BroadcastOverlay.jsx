@@ -232,26 +232,20 @@ function AbandonOfferCard({ offer, onTakeBack, onMoveOn }) {
   );
 }
 
-// ─── Broadcast cancelled card ─────────────────────────────────────────────────
-function BroadcastCancelledCard({ onDismiss }) {
+// ─── Auto-dismissing toast for broadcast events ───────────────────────────────
+const SNACK_COLOR = { info: "var(--gold)", warning: "var(--gold)", error: "var(--red)", success: "var(--green)" };
+function BroadcastToast({ snackbar }) {
+  if (!snackbar) return null;
+  const color = SNACK_COLOR[snackbar.type] || "var(--text-3)";
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(10,11,18,0.92)", backdropFilter: "blur(8px)", display: "flex", alignItems: "flex-end", padding: `0 0 ${NAV_H}px` }}>
-      <div style={{ width: "100%", background: "var(--surface)", borderRadius: "22px 22px 0 0", overflow: "hidden", border: "1px solid rgba(255,183,0,0.25)", borderBottom: "none", boxShadow: "0 -8px 40px rgba(0,0,0,0.5)" }}>
-        <div style={{ height: 3, background: "linear-gradient(90deg,var(--gold),rgba(255,183,0,0.1))" }} />
-        <div style={{ padding: "28px 20px 32px", textAlign: "center" }}>
-          <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(255,183,0,0.1)", border: "1px solid rgba(255,183,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px" }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="var(--gold)" strokeWidth="1.5" strokeLinejoin="round"/>
-              <path d="M12 9v4M12 16.5v.5" stroke="var(--gold)" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          </div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>Request Withdrawn</div>
-          <div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.6, marginBottom: 24, maxWidth: 280, margin: "0 auto 24px" }}>
-            The user cancelled their SOS before you could respond. You're still online for new requests.
-          </div>
-          <button onClick={onDismiss} className="ps-btn-ghost" style={{ maxWidth: 200, margin: "0 auto" }}>Got it</button>
-        </div>
-      </div>
+    <div style={{
+      position: "fixed", bottom: NAV_H + 12, left: 16, right: 16, zIndex: 60,
+      background: "var(--surface2)", border: `1px solid ${color}33`, borderRadius: 12,
+      padding: "12px 16px", display: "flex", alignItems: "center", gap: 10,
+      boxShadow: "0 4px 24px rgba(0,0,0,0.4)", pointerEvents: "none",
+    }}>
+      <div style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0 }} />
+      <span style={{ fontSize: 13, color: "var(--text)" }}>{snackbar.message}</span>
     </div>
   );
 }
@@ -261,8 +255,8 @@ function BroadcastCancelledCard({ onDismiss }) {
 export default function BroadcastOverlay({ onAcceptSuccess }) {
   const {
     broadcasts,
-    broadcastCancelledByUser, setBroadcastCancelledByUser,
     abandonedJobOffer,
+    snackbar,
     handleAccept, handleDecline,
     handleTakeBack, handleMoveOn,
   } = useBroadcast();
@@ -286,38 +280,46 @@ export default function BroadcastOverlay({ onAcceptSuccess }) {
     prevCountRef.current = broadcasts.length;
   }, [broadcasts.length]);
 
+  const toast = <BroadcastToast snackbar={snackbar} />;
+
   // Abandon offer takes absolute priority
   if (abandonedJobOffer) {
     return (
-      <AbandonOfferCard
-        offer={abandonedJobOffer}
-        onTakeBack={() => handleTakeBack(abandonedJobOffer.jobId, onAcceptSuccess)}
-        onMoveOn={() => handleMoveOn(abandonedJobOffer.jobId)}
-      />
+      <>
+        <AbandonOfferCard
+          offer={abandonedJobOffer}
+          onTakeBack={() => handleTakeBack(abandonedJobOffer.jobId, onAcceptSuccess)}
+          onMoveOn={() => handleMoveOn(abandonedJobOffer.jobId)}
+        />
+        {toast}
+      </>
     );
-  }
-
-  // Cancelled card — only when nothing else is showing
-  if (broadcastCancelledByUser && broadcasts.length === 0) {
-    return <BroadcastCancelledCard onDismiss={() => setBroadcastCancelledByUser(false)} />;
   }
 
   // Mechanic already on a job — ActiveJobFloat owns this space
-  if (activeJob) return null;
+  if (activeJob) return toast;
 
   // No broadcasts
-  if (broadcasts.length === 0) return null;
+  if (broadcasts.length === 0) return toast;
 
   if (expanded) {
     return (
-      <ExpandedList
-        broadcasts={broadcasts}
-        onAccept={(jobId, broadcastId) => handleAccept(jobId, broadcastId, onAcceptSuccess)}
-        onDecline={handleDecline}
-        onMinimize={() => setExpanded(false)}
-      />
+      <>
+        <ExpandedList
+          broadcasts={broadcasts}
+          onAccept={(jobId, broadcastId) => handleAccept(jobId, broadcastId, onAcceptSuccess)}
+          onDecline={handleDecline}
+          onMinimize={() => setExpanded(false)}
+        />
+        {toast}
+      </>
     );
   }
 
-  return <MinimizedStrip broadcasts={broadcasts} onExpand={() => setExpanded(true)} />;
+  return (
+    <>
+      <MinimizedStrip broadcasts={broadcasts} onExpand={() => setExpanded(true)} />
+      {toast}
+    </>
+  );
 }

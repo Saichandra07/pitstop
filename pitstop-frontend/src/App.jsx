@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import { useAuth } from './context/AuthContext';
+import { WebSocketProvider } from './context/WebSocketContext';
 import { BroadcastProvider } from './context/BroadcastContext';
 import { ActiveJobProvider } from './context/ActiveJobContext';
 import ActiveJobFloat from './components/ActiveJobFloat';
@@ -33,6 +34,7 @@ function RootRedirect() {
 function App() {
   return (
     <BrowserRouter>
+      <WebSocketProvider>
       <BroadcastProvider>
       <ActiveJobProvider>
       <ActiveJobFloat />
@@ -121,6 +123,7 @@ function App() {
       </Routes>
       </ActiveJobProvider>
       </BroadcastProvider>
+      </WebSocketProvider>
     </BrowserRouter>
   )
 }

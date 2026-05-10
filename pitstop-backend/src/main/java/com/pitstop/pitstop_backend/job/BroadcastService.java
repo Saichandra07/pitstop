@@ -3,8 +3,10 @@ package com.pitstop.pitstop_backend.job;
 import com.pitstop.pitstop_backend.account.MechanicProfile;
 import com.pitstop.pitstop_backend.account.MechanicProfileRepository;
 import com.pitstop.pitstop_backend.account.VerificationStatus;
+import com.pitstop.pitstop_backend.config.WebSocketEventPublisher;
 import com.pitstop.pitstop_backend.job.dto.AbandonResponse;
 import com.pitstop.pitstop_backend.job.dto.BroadcastJobResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,6 +32,8 @@ public class BroadcastService {
     private final JobRepository jobRepository;
     private final JobBroadcastRepository jobBroadcastRepository;
     private final MechanicProfileRepository mechanicProfileRepository;
+    @Autowired
+    private WebSocketEventPublisher wsPublisher;
 
     public BroadcastService(
             JobRepository jobRepository,
@@ -67,6 +72,8 @@ public class BroadcastService {
             broadcast.setMechanicProfileId(mp.getId());
             broadcast.setRing(job.getBroadcastRing());
             jobBroadcastRepository.save(broadcast);
+            // Push a ping so the mechanic's frontend calls poll() immediately instead of waiting 30s.
+            wsPublisher.publishBroadcast(mp.getAccount().getId(), Map.of("type", "NEW_BROADCAST"));
         }
     }
 
@@ -151,6 +158,11 @@ public class BroadcastService {
         profile.setLatitude(null);
         profile.setLongitude(null);
         mechanicProfileRepository.save(profile);
+
+        // Notify both sides — user sees ACCEPTED, mechanic sees their own job card update.
+        // afterCommitOrNow inside wsPublisher ensures DB is committed before the WS event fires.
+        wsPublisher.publishJobUpdate(job.getAccountId(), accountId,
+                java.util.Map.of("type", "JOB_UPDATE"));
     }
 
     // Mechanic abandons active job — resets to PENDING, restarts Ring 1 broadcast immediately
@@ -215,6 +227,11 @@ public class BroadcastService {
         }
 
         mechanicProfileRepository.save(profile);
+
+        // Notify user their job went back to PENDING (mechanic abandoned).
+        wsPublisher.publishJobUpdate(job.getAccountId(), null,
+                java.util.Map.of("type", "JOB_UPDATE"));
+
         return response;
     }
 
@@ -255,6 +272,10 @@ public class BroadcastService {
         profile.setLatitude(null);
         profile.setLongitude(null);
         mechanicProfileRepository.save(profile);
+
+        // Notify user their job is ACCEPTED again (mechanic took it back).
+        wsPublisher.publishJobUpdate(job.getAccountId(), accountId,
+                java.util.Map.of("type", "JOB_UPDATE"));
     }
 
     // Mechanic declines to take back the abandoned job — permanently blocks it and
@@ -328,12 +349,17 @@ public class BroadcastService {
                 mechanic.getLongitude(),
                 mechanic.getServiceRadiusKm()
         );
+        boolean notified = false;
         for (Job job : eligible) {
             JobBroadcast broadcast = new JobBroadcast();
             broadcast.setJobId(job.getId());
             broadcast.setMechanicProfileId(mechanic.getId());
             broadcast.setRing(job.getBroadcastRing());
             jobBroadcastRepository.save(broadcast);
+            notified = true;
+        }
+        if (notified) {
+            wsPublisher.publishBroadcast(mechanic.getAccount().getId(), Map.of("type", "NEW_BROADCAST"));
         }
     }
 
@@ -364,6 +390,9 @@ public class BroadcastService {
             job.setCancellationReason(reason);
             job.setStatus(JobStatus.CANCELLED);
             jobRepository.save(job);
+            // Push cancellation to user immediately — no mechanic was found.
+            wsPublisher.publishJobUpdate(job.getAccountId(), null,
+                    Map.of("type", "JOB_CANCELLED", "cancellationReason", reason.name()));
         }
     }
 }

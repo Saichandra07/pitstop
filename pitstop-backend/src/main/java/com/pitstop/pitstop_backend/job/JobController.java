@@ -35,6 +35,13 @@ public class JobController {
         this.reviewService = reviewService;
     }
 
+    // POST /api/jobs/logout — USER: cancel any active job on logout, fires WS so mechanics update instantly
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logoutCleanup() {
+        jobService.cancelJobOnLogout(getAccountId());
+        return ResponseEntity.ok().build();
+    }
+
     // POST /api/jobs/sos — USER only (SecurityConfig)
     @PostMapping("/sos")
     public ResponseEntity<JobResponseDto> createSos(@Valid @RequestBody SosRequestDto dto) {
