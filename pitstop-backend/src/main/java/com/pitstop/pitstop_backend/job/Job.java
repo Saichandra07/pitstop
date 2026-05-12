@@ -12,6 +12,9 @@ public class Job {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Version
+    private Long version = 0L;
+
     @Column(name = "account_id", nullable = false)
     private Long accountId;
 
@@ -75,6 +78,9 @@ public class Job {
     }
 
     public Long getId() { return id; }
+
+    public Long getVersion() { return version; }
+    public void setVersion(Long version) { this.version = version; }
 
     public Long getAccountId() { return accountId; }
     public void setAccountId(Long accountId) { this.accountId = accountId; }

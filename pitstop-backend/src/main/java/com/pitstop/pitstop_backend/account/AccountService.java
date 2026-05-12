@@ -17,6 +17,7 @@ import com.pitstop.pitstop_backend.account.dto.MechanicPendingResponse;
 import com.pitstop.pitstop_backend.account.dto.VerifyMechanicRequest;
 import com.pitstop.pitstop_backend.account.RejectionReason;
 import java.util.stream.Collectors;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -34,6 +35,7 @@ public class AccountService {
     private final EmailVerificationTokenRepository emailVerificationTokenRepository;
     private final EmailService emailService;
     private final JobRepository jobRepository;
+    private final RateLimiterService rateLimiterService;
 
     @org.springframework.beans.factory.annotation.Autowired
     private BroadcastService broadcastService;
@@ -48,7 +50,8 @@ public class AccountService {
             PasswordResetTokenRepository passwordResetTokenRepository,
             EmailVerificationTokenRepository emailVerificationTokenRepository,
             EmailService emailService,
-            JobRepository jobRepository
+            JobRepository jobRepository,
+            RateLimiterService rateLimiterService
             ) {
         this.accountRepository = accountRepository;
         this.passwordEncoder = passwordEncoder;
@@ -60,10 +63,12 @@ public class AccountService {
         this.emailVerificationTokenRepository = emailVerificationTokenRepository;
         this.emailService = emailService;
         this.jobRepository = jobRepository;
+        this.rateLimiterService = rateLimiterService;
     }
 
 
-    public LoginResponse register(RegisterRequest request) {
+    public LoginResponse register(RegisterRequest request, String clientIp) {
+        rateLimiterService.checkAndRecord(clientIp + ":register", 3, 60);
 
         if (accountRepository.existsByEmail(request.email())) {
             throw new RuntimeException("Email already registered");
@@ -124,13 +129,23 @@ public class AccountService {
         saveExpertiseRows(mechanicProfileId, request);
     }
 
-    public LoginResponse login (LoginRequest request){
+    public LoginResponse login(LoginRequest request, String clientIp) {
         // fetch account by email — if not found, don't reveal whether email exists
         Account account = accountRepository.findByEmail(request.email())
-                .orElseThrow(()-> new RuntimeException("Invalid credentials"));
+                .orElseThrow(() -> new RuntimeException("Invalid credentials"));
 
-        //BCrypt compare - reject wrong passwords
-        if(!passwordEncoder.matches(request.password(), account.getPasswordHash())){
+        if (Boolean.TRUE.equals(account.getIsBanned())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Your account has been banned");
+        }
+
+        if (!account.isEmailVerified()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Please verify your email address. Check your inbox for the verification link.");
+        }
+
+        //BCrypt compare - reject wrong passwords; only failed attempts count toward the rate limit
+        if (!passwordEncoder.matches(request.password(), account.getPasswordHash())) {
+            rateLimiterService.checkAndRecord(clientIp + ":login", 5, 15);
             throw new RuntimeException("Invalid credentials");
         }
 
@@ -157,6 +172,13 @@ public class AccountService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Only verified mechanics can change availability");
         }
+
+        if (profile.getLastAvailabilityToggleAt() != null &&
+                Duration.between(profile.getLastAvailabilityToggleAt(), LocalDateTime.now()).toSeconds() < 10) {
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                    "Please wait before toggling again");
+        }
+        profile.setLastAvailabilityToggleAt(LocalDateTime.now());
 
         boolean goingOnline = Boolean.TRUE.equals(request.isAvailable());
 
@@ -317,6 +339,15 @@ public class AccountService {
     public void forgotPassword(String email) {
         Account account = accountRepository.findByEmail(email)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No account found with that email"));
+
+        LocalDateTime now = LocalDateTime.now();
+        if (account.getLastPasswordResetRequestAt() != null &&
+                Duration.between(account.getLastPasswordResetRequestAt(), now).toSeconds() < 60) {
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                    "Please wait a minute before requesting another reset link.");
+        }
+        account.setLastPasswordResetRequestAt(now);
+        accountRepository.save(account);
 
         passwordResetTokenRepository.deleteAllByAccountId(account.getId());
 

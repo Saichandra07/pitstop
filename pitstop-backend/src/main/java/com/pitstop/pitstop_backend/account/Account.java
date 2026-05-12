@@ -36,6 +36,10 @@ public class Account {
     @Column(nullable = true)
     private LocalDateTime sosTimeoutUntil;
 
+    // Last time a password reset email was requested — used to enforce 1/min rate limit
+    @Column(nullable = true)
+    private LocalDateTime lastPasswordResetRequestAt;
+
     // Admin hard-ban — banned user cannot login at all
     @Column(nullable = false)
     private Boolean isBanned = false;
@@ -76,6 +80,9 @@ public class Account {
 
     public LocalDateTime getSosTimeoutUntil() { return sosTimeoutUntil; }
     public void setSosTimeoutUntil(LocalDateTime sosTimeoutUntil) { this.sosTimeoutUntil = sosTimeoutUntil; }
+
+    public LocalDateTime getLastPasswordResetRequestAt() { return lastPasswordResetRequestAt; }
+    public void setLastPasswordResetRequestAt(LocalDateTime lastPasswordResetRequestAt) { this.lastPasswordResetRequestAt = lastPasswordResetRequestAt; }
 
     public Boolean getIsBanned() { return isBanned; }
     public void setIsBanned(Boolean isBanned) { this.isBanned = isBanned; }

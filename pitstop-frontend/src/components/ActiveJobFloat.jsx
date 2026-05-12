@@ -212,6 +212,7 @@ export default function ActiveJobFloat() {
 
   // Derive "Mark Arrived" button label based on proximity
   function arrivedBtnLabel() {
+    if (activeJobLoading) return "Marking…";
     if (mechDist === null) return "Getting location…";
     if (withinRange)       return "Mark Arrived ✓";
     return `Mark Arrived (${mechDist.toFixed(1)} km away)`;
@@ -526,7 +527,7 @@ export default function ActiveJobFloat() {
                     className="ps-btn"
                     style={{ flex: 1, height: 40, fontSize: 13, padding: 0, opacity: activeJobLoading ? 0.5 : 1 }}
                   >
-                    ✓ Confirm Arrived
+                    {activeJobLoading ? "Confirming…" : "✓ Confirm Arrived"}
                   </button>
                   <button
                     onClick={() => handleRejectArrival(activeJob.id)}
@@ -559,7 +560,7 @@ export default function ActiveJobFloat() {
                     className="ps-btn"
                     style={{ flex: 1, height: 40, fontSize: 13, padding: 0, opacity: activeJobLoading ? 0.5 : 1 }}
                   >
-                    ✓ Confirm Complete
+                    {activeJobLoading ? "Confirming…" : "✓ Confirm Complete"}
                   </button>
                   <button
                     onClick={() => handleRejectComplete(activeJob.id)}
@@ -669,7 +670,7 @@ export default function ActiveJobFloat() {
                   className="ps-btn"
                   style={{ flex: 2, height: 42, fontSize: 13, padding: 0, opacity: activeJobLoading ? 0.5 : 1 }}
                 >
-                  Mark Complete ✓
+                  {activeJobLoading ? "Marking…" : "Mark Complete ✓"}
                 </button>
               )}
 

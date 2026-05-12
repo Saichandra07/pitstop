@@ -62,7 +62,14 @@ public interface JobRepository extends JpaRepository<Job, Long> {
                 cos(radians(j.latitude)) * cos(radians(:lat))
                 * cos(radians(:lng) - radians(j.longitude))
                 + sin(radians(j.latitude)) * sin(radians(:lat))
-            ))) <= LEAST(:maxKm, 20.0)
+            ))) <= LEAST(:maxKm,
+                CASE j.broadcast_ring
+                    WHEN 1 THEN 2.0
+                    WHEN 2 THEN 5.0
+                    WHEN 3 THEN 10.0
+                    ELSE 20.0
+                END
+            )
             """, nativeQuery = true)
     List<Job> findEligiblePendingJobsForMechanic(
             @Param("mechanicProfileId") Long mechanicProfileId,

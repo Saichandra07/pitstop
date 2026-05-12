@@ -59,14 +59,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/jobs/pending").hasRole("MECHANIC")
                         // Broadcast polling — get the job currently sent to this mechanic
                         .requestMatchers(HttpMethod.GET, "/api/jobs/broadcast/pending").hasRole("MECHANIC")
-                        // Mechanic's own completed job history
+                        // Mechanic's own completed job history and current active job
                         .requestMatchers(HttpMethod.GET, "/api/jobs/mechanic/history").hasRole("MECHANIC")
+                        .requestMatchers(HttpMethod.GET, "/api/jobs/mechanic/active").hasRole("MECHANIC")
                         // Accept / decline a broadcast job
                         .requestMatchers(HttpMethod.POST, "/api/jobs/*/accept").hasRole("MECHANIC")
                         .requestMatchers(HttpMethod.POST, "/api/jobs/*/decline").hasRole("MECHANIC")
                         .requestMatchers(HttpMethod.POST, "/api/jobs/*/mechanic-abandon").hasRole("MECHANIC")
-                        // Accept a job (legacy assign endpoint)
-                        .requestMatchers(HttpMethod.POST, "/api/jobs/*/assign").hasRole("MECHANIC")
                         // Push job status forward (IN_PROGRESS, COMPLETED)
                         .requestMatchers(HttpMethod.PATCH, "/api/jobs/*/status").hasRole("MECHANIC")
                         // Availability toggle
@@ -88,6 +87,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/jobs/*/reject-complete").hasRole("USER")
                         // Their job feeds
                         .requestMatchers(HttpMethod.GET, "/api/jobs/my/**").hasRole("USER")
+
+                        // ── ADMIN catch-alls (IDOR guard) ───────────────────────────
+                        // Generic GET /api/jobs/{id} and /api/jobs/mechanic/{mechanicProfileId}
+                        // must be ADMIN-only — any authenticated user could scrape GPS/photo of any job.
+                        // All role-specific read endpoints are defined above and take precedence.
+                        .requestMatchers(HttpMethod.GET, "/api/jobs/*").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/jobs/mechanic/*").hasRole("ADMIN")
 
                         // ── Any authenticated ───────────────────────────────────────
                         .anyRequest().authenticated()

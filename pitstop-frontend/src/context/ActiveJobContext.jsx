@@ -41,19 +41,13 @@ export function ActiveJobProvider({ children }) {
         const job = res.data?.id ? res.data : null;
         // Job disappeared without mechanic action — distinguish completion from cancellation
         if (prevActiveJobRef.current?.id && !job && !expectingJobEndRef.current) {
-          if (prevActiveJobRef.current.status === "COMPLETION_REQUESTED") {
-            // Previous status was COMPLETION_REQUESTED → user confirmed, job done
+          const prevStatus = prevActiveJobRef.current.status;
+          // IN_PROGRESS or COMPLETION_REQUESTED disappearing → user confirmed completion.
+          // ACCEPTED or ARRIVAL_REQUESTED disappearing → user cancelled (they can cancel from those states).
+          if (prevStatus === "COMPLETION_REQUESTED" || prevStatus === "IN_PROGRESS") {
             setJobCompletedSuccessfully(true);
           } else {
-            // Poll may have missed intermediate statuses (e.g. rapid transitions in testing).
-            // Look up the actual final status to distinguish COMPLETED from CANCELLED.
-            const prevId = prevActiveJobRef.current.id;
-            api.get(`/jobs/${prevId}`)
-              .then(r => {
-                if (r.data?.status === "COMPLETED") setJobCompletedSuccessfully(true);
-                else setJobCancelledByUser(true);
-              })
-              .catch(() => setJobCancelledByUser(true));
+            setJobCancelledByUser(true);
           }
         }
         prevActiveJobRef.current = job;

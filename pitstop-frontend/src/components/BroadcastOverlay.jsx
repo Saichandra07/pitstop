@@ -28,7 +28,8 @@ function fmtLabel(val) {
 // ─── Single SOS card (used in expanded list) ──────────────────────────────────
 function JobRequestCard({ broadcast, onAccept, onDecline }) {
   const deadline  = useMemo(() => broadcast._receivedAt + 90_000, [broadcast._receivedAt]);
-  const [rem, setRem] = useState(() => Math.max(0, Math.floor((deadline - Date.now()) / 1000)));
+  const [rem, setRem]         = useState(() => Math.max(0, Math.floor((deadline - Date.now()) / 1000)));
+  const [accepting, setAccepting] = useState(false);
 
   useEffect(() => {
     if (rem <= 0) { onDecline(broadcast.jobId, broadcast.broadcastId); return; }
@@ -39,6 +40,16 @@ function JobRequestCard({ broadcast, onAccept, onDecline }) {
     }, 1000);
     return () => clearInterval(id);
   }, [deadline, broadcast.jobId, broadcast.broadcastId, onDecline, rem]);
+
+  async function handleAcceptClick() {
+    if (accepting) return;
+    setAccepting(true);
+    try {
+      await onAccept(broadcast.jobId, broadcast.broadcastId);
+    } catch {
+      setAccepting(false);
+    }
+  }
 
   const urgent = rem <= 30;
   const pct    = (rem / 90) * 100;
@@ -96,8 +107,18 @@ function JobRequestCard({ broadcast, onAccept, onDecline }) {
 
         {/* Buttons */}
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => onDecline(broadcast.jobId, broadcast.broadcastId)} className="ps-btn-ghost" style={{ flex: 1, height: 44, fontSize: 12 }}>Decline</button>
-          <button onClick={() => onAccept(broadcast.jobId, broadcast.broadcastId)} className="ps-btn" style={{ flex: 2, height: 44, fontSize: 13, fontWeight: 700 }}>Accept ✓</button>
+          <button
+            onClick={() => onDecline(broadcast.jobId, broadcast.broadcastId)}
+            disabled={accepting}
+            className="ps-btn-ghost"
+            style={{ flex: 1, height: 44, fontSize: 12, opacity: accepting ? 0.4 : 1 }}
+          >Decline</button>
+          <button
+            onClick={handleAcceptClick}
+            disabled={accepting}
+            className="ps-btn"
+            style={{ flex: 2, height: 44, fontSize: 13, fontWeight: 700 }}
+          >{accepting ? "Accepting…" : "Accept ✓"}</button>
         </div>
       </div>
     </div>

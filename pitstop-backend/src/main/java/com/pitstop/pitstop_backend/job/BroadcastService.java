@@ -8,6 +8,7 @@ import com.pitstop.pitstop_backend.job.dto.AbandonResponse;
 import com.pitstop.pitstop_backend.job.dto.BroadcastJobResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -114,8 +115,10 @@ public class BroadcastService {
     }
 
     // Mechanic accepts. Locks the job, expires all competing broadcasts, takes mechanic offline.
+    // @Version on Job causes ObjectOptimisticLockingFailureException if two mechanics accept simultaneously.
     @Transactional
     public void handleAccept(Long jobId, Long accountId) {
+        try {
         MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "No mechanic profile found"));
@@ -163,6 +166,9 @@ public class BroadcastService {
         // afterCommitOrNow inside wsPublisher ensures DB is committed before the WS event fires.
         wsPublisher.publishJobUpdate(job.getAccountId(), accountId,
                 java.util.Map.of("type", "JOB_UPDATE"));
+        } catch (ObjectOptimisticLockingFailureException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Job was just taken by another mechanic");
+        }
     }
 
     // Mechanic abandons active job — resets to PENDING, restarts Ring 1 broadcast immediately

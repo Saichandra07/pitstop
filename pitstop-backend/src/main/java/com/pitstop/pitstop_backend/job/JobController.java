@@ -112,12 +112,6 @@ public class JobController {
         return ResponseEntity.ok(jobService.getJobsByMechanic(mechanicProfileId));
     }
 
-    // POST /api/jobs/{jobId}/assign — MECHANIC accepts a PENDING job (issue #1)
-    @PostMapping("/{jobId}/assign")
-    public ResponseEntity<JobResponseDto> assignMechanic(@PathVariable Long jobId) {
-        return ResponseEntity.ok(jobService.assignMechanic(jobId, getAccountId()));
-    }
-
     // PATCH /api/jobs/{jobId}/cancel — USER cancels their own job (issue #8)
     @PatchMapping("/{jobId}/cancel")
     public ResponseEntity<JobResponseDto> cancelJob(@PathVariable Long jobId) {

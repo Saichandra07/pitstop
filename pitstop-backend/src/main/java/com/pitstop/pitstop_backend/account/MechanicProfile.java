@@ -79,6 +79,10 @@ public class MechanicProfile {
     @Column(nullable = true)
     private Double lastKnownLongitude;
 
+    // Tracks last toggle time — prevents spam toggles (10s cooldown enforced in service)
+    @Column(nullable = true)
+    private LocalDateTime lastAvailabilityToggleAt;
+
     // Rating stats — updated on every review submission
     @Column(nullable = true)
     private Double averageRating;
@@ -162,6 +166,9 @@ public class MechanicProfile {
 
     public Double getLastKnownLongitude() { return lastKnownLongitude; }
     public void setLastKnownLongitude(Double lastKnownLongitude) { this.lastKnownLongitude = lastKnownLongitude; }
+
+    public LocalDateTime getLastAvailabilityToggleAt() { return lastAvailabilityToggleAt; }
+    public void setLastAvailabilityToggleAt(LocalDateTime lastAvailabilityToggleAt) { this.lastAvailabilityToggleAt = lastAvailabilityToggleAt; }
 
     public Double getAverageRating() { return averageRating; }
     public void setAverageRating(Double averageRating) { this.averageRating = averageRating; }

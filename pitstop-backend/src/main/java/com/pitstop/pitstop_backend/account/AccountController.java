@@ -6,6 +6,7 @@ import com.pitstop.pitstop_backend.account.dto.AvailabilityRequest;
 import com.pitstop.pitstop_backend.auth.JwtUtil;
 import com.pitstop.pitstop_backend.common.dto.LoginResponse;
 import com.pitstop.pitstop_backend.job.JobService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -45,18 +46,15 @@ public class AccountController {
     }
 
     @PostMapping("/auth/register")
-    public ResponseEntity<LoginResponse> register (@RequestBody RegisterRequest request){
-        LoginResponse response = accountService.register(request);
+    public ResponseEntity<LoginResponse> register(@RequestBody RegisterRequest request, HttpServletRequest httpRequest) {
+        LoginResponse response = accountService.register(request, getClientIp(httpRequest));
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        // .body(response) — token + user info returned immediately after register
-        // user is logged at the moment they register, no second login call needed
     }
 
     @PostMapping("/auth/login")
-    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request){
-        LoginResponse response = accountService.login(request);
+    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+        LoginResponse response = accountService.login(request, getClientIp(httpRequest));
         return ResponseEntity.ok(response);
-        //200 OK - no resource created, just authenticated
     }
 
     // PATCH /api/accounts/availability — MECHANIC only (SecurityConfig)
@@ -147,6 +145,14 @@ public class AccountController {
     private Long getAccountId() {
         return (Long) SecurityContextHolder.getContext()
                 .getAuthentication().getPrincipal();
+    }
+
+    // Respects X-Forwarded-For so the correct IP is captured behind a proxy/load balancer
+    private String getClientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        return (forwarded != null && !forwarded.isBlank())
+                ? forwarded.split(",")[0].trim()
+                : request.getRemoteAddr();
     }
 
     // Admin - Mechanics

@@ -104,6 +104,13 @@ public class JobService {
                     "You already have an active job. Cancel it before submitting a new SOS.");
         }
 
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
+        if (account.getSosTimeoutUntil() != null && account.getSosTimeoutUntil().isAfter(java.time.LocalDateTime.now())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "You are temporarily blocked from submitting SOS until " + account.getSosTimeoutUntil());
+        }
+
         Job job = new Job();
         job.setAccountId(accountId);
         job.setVehicleType(dto.getVehicleType());
@@ -258,43 +265,6 @@ public class JobService {
                 .stream().map(this::toDto).findFirst();
     }
 
-    // ── Assignment ─────────────────────────────────────────────────────────────
-
-    // Issue #1, #4, #6 — mechanic accepts a PENDING job
-    // mechanicProfileId comes from JWT (accountId → look up mechanic_profile)
-    public JobResponseDto assignMechanic(Long jobId, Long accountId) {
-
-        // Resolve mechanic profile from accountId
-        MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN,
-                        "No mechanic profile found for this account"));
-
-        // Issue #4 — only VERIFIED mechanics can accept jobs
-        if (profile.getVerificationStatus() != VerificationStatus.VERIFIED) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Your profile is not verified. You cannot accept jobs.");
-        }
-
-        // Issue #4 — mechanic must be online
-        if (!profile.getIsAvailable()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "You are marked as unavailable. Go online before accepting jobs.");
-        }
-
-        // Fetch job — must be PENDING to be assignable
-        Job job = jobRepository.findByIdAndStatus(jobId, JobStatus.PENDING)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
-                        "Job is no longer available"));
-
-        // Issue #6 — set mechanicProfileId (was always null before)
-        job.setMechanicProfileId(profile.getId());
-        job.setStatus(JobStatus.ACCEPTED);
-
-        JobResponseDto dto = toDto(jobRepository.save(job));
-        wsPublisher.publishJobUpdate(job.getAccountId(), profile.getAccount().getId(), dto);
-        return dto;
-    }
-
     // ── Status Transitions ─────────────────────────────────────────────────────
 
     // Issue #8 — fixed cancel rules
@@ -319,10 +289,12 @@ public class JobService {
                     "Job is already " + job.getStatus());
         }
 
+        boolean wasPending = job.getStatus() == JobStatus.PENDING;
+
         // Collect mechanics who currently have SENT broadcasts for this job BEFORE expiring.
         // For PENDING jobs these are the mechanics seeing this job in their BroadcastOverlay —
         // they need a WS ping so their poll() fires immediately and their overlay clears.
-        List<Long> broadcastMechanicProfileIds = (job.getStatus() == JobStatus.PENDING)
+        List<Long> broadcastMechanicProfileIds = wasPending
                 ? jobBroadcastRepository.findByJobIdAndStatus(jobId, JobBroadcastStatus.SENT)
                         .stream().map(JobBroadcast::getMechanicProfileId).collect(Collectors.toList())
                 : List.of();
@@ -333,6 +305,18 @@ public class JobService {
         job.setCancellationReason(CancellationReason.USER_CANCELLED);
         job.setStatus(JobStatus.CANCELLED);
         jobRepository.save(job);
+
+        // Pre-acceptance cancels are free but tracked — 3+ within the window triggers a 24hr SOS timeout
+        if (wasPending) {
+            Account acc = accountRepository.findById(accountId).orElse(null);
+            if (acc != null) {
+                acc.setSosCancelCount(acc.getSosCancelCount() + 1);
+                if (acc.getSosCancelCount() >= 3) {
+                    acc.setSosTimeoutUntil(java.time.LocalDateTime.now().plusHours(1));
+                }
+                accountRepository.save(acc);
+            }
+        }
 
         // If a mechanic was already assigned, automatically bring them back online
         // using the location snapshot saved at accept time.
@@ -507,6 +491,7 @@ public class JobService {
                 mp.setIsAvailable(true);
                 mp.setLatitude(mp.getLastKnownLatitude());
                 mp.setLongitude(mp.getLastKnownLongitude());
+                mp.setTotalJobsCompleted(mp.getTotalJobsCompleted() + 1);
                 mechanicProfileRepository.save(mp);
                 mechanicAccId = mp.getAccount().getId();
                 if (mp.getLatitude() != null && mp.getLongitude() != null) {
