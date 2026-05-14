@@ -100,6 +100,9 @@ public class AccountService {
         account.setName(request.name());
         account.setPasswordHash(passwordEncoder.encode(request.password()));
         account.setRole(request.role());
+        if (request.role() == Role.USER && request.phone() != null && !request.phone().isBlank()) {
+            account.setPhone(request.phone().trim());
+        }
 
         Account saved = accountRepository.save(account);
         sendVerificationEmail(saved.getId(), saved.getEmail());
@@ -350,7 +353,8 @@ public class AccountService {
                     profile.getReviewCount(),
                     profile.getTotalJobsCompleted(),
                     account.getProfilePhotoUrl(),
-                    profile.getAppealStatus() != null ? profile.getAppealStatus().name() : null
+                    profile.getAppealStatus() != null ? profile.getAppealStatus().name() : null,
+                    account.getPhone()
             );
         }
 
@@ -359,7 +363,8 @@ public class AccountService {
                 account.getName(),
                 account.getEmail(),
                 account.getRole().name(),
-                null, null, null, null, null, null, null, null, null  // USER — no mechanic fields
+                null, null, null, null, null, null, null, null, null,  // USER — no mechanic fields
+                account.getPhone()
         );
     }
 
@@ -622,6 +627,15 @@ public class AccountService {
         mechanicProfileRepository.save(profile);
     }
 
+    public void updateMechanicLocation(Long accountId, LocationRequest request) {
+        MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Mechanic profile not found"));
+        profile.setLatitude(request.latitude());
+        profile.setLongitude(request.longitude());
+        mechanicProfileRepository.save(profile);
+    }
+
     public String uploadProfilePhoto(Long accountId, MultipartFile file) {
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
@@ -641,6 +655,15 @@ public class AccountService {
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
         account.setName(name.trim());
+        accountRepository.save(account);
+    }
+
+    public void updatePhone(Long accountId, String phone) {
+        if (phone == null || phone.isBlank())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phone cannot be blank");
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+        account.setPhone(phone.trim());
         accountRepository.save(account);
     }
 

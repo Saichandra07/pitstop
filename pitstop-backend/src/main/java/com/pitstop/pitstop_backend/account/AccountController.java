@@ -233,9 +233,21 @@ public class AccountController {
         return ResponseEntity.noContent().build();
     }
 
+    @PatchMapping("/accounts/phone")
+    public ResponseEntity<Void> updatePhone(@RequestBody Map<String, String> body) {
+        accountService.updatePhone(getAccountId(), body.get("phone"));
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/mechanic/heartbeat")
     public ResponseEntity<Void> heartbeat() {
         accountService.updateHeartbeat(getAccountId());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/mechanic/location")
+    public ResponseEntity<Void> updateLocation(@RequestBody LocationRequest request) {
+        accountService.updateMechanicLocation(getAccountId(), request);
         return ResponseEntity.noContent().build();
     }
 

@@ -310,6 +310,25 @@ export default function MechanicDashboardPage() {
     prevJobIdRef.current = activeJob?.id ?? null;
   }, [activeJob, fetchMe]);
 
+  // Continuously refresh mechanic coords while online or on an active job
+  useEffect(() => {
+    if (!me?.isAvailable && !activeJob) return;
+    const updateLocation = () => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          api.patch('/mechanic/location', {
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude
+          }).catch(() => {});
+        },
+        () => {}
+      );
+    };
+    updateLocation();
+    const id = setInterval(updateLocation, 60_000);
+    return () => clearInterval(id);
+  }, [me?.isAvailable, !!activeJob]);
+
   // ── Snackbar ───────────────────────────────────────────────────────────────
 
   function showSnackbar(message, type = "info") {

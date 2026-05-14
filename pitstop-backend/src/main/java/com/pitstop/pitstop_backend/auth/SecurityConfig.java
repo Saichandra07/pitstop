@@ -80,10 +80,14 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/accounts/profile-photo").hasRole("MECHANIC")
                         // Heartbeat ping during active job — MECHANIC only
                         .requestMatchers(HttpMethod.POST, "/api/mechanic/heartbeat").hasRole("MECHANIC")
+                        // Continuous location refresh while online — MECHANIC only
+                        .requestMatchers(HttpMethod.PATCH, "/api/mechanic/location").hasRole("MECHANIC")
                         // Appeal submission — MECHANIC only
                         .requestMatchers(HttpMethod.POST, "/api/accounts/appeal").hasRole("MECHANIC")
 
                         // ── USER only ───────────────────────────────────────────────
+                        // Update phone number
+                        .requestMatchers(HttpMethod.PATCH, "/api/accounts/phone").hasRole("USER")
                         // Submit SOS
                         .requestMatchers(HttpMethod.POST, "/api/jobs/sos").hasRole("USER")
                         // Submit a review after job completion

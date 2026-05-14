@@ -17,6 +17,7 @@ public class AccountMeResponse {
     private Integer totalJobsCompleted; // null for USER
     private String profilePhotoUrl; // null for USER
     private String appealStatus;    // null for USER, enum name for MECHANIC
+    private String phone;           // user's contact phone number
 
     public AccountMeResponse(Long id, String name, String email, String role,
                              VerificationStatus verificationStatus,
@@ -24,7 +25,7 @@ public class AccountMeResponse {
                              Boolean hasExpertise,
                              Double averageRating, Integer reviewCount,
                              Integer totalJobsCompleted, String profilePhotoUrl,
-                             String appealStatus) {
+                             String appealStatus, String phone) {
         this.id = id;
         this.name = name;
         this.email = email;
@@ -38,6 +39,7 @@ public class AccountMeResponse {
         this.totalJobsCompleted = totalJobsCompleted;
         this.profilePhotoUrl = profilePhotoUrl;
         this.appealStatus = appealStatus;
+        this.phone = phone;
     }
 
     public Long getId() { return id; }
@@ -53,4 +55,5 @@ public class AccountMeResponse {
     public Integer getTotalJobsCompleted() { return totalJobsCompleted; }
     public String getProfilePhotoUrl() { return profilePhotoUrl; }
     public String getAppealStatus() { return appealStatus; }
+    public String getPhone() { return phone; }
 }

@@ -50,6 +50,9 @@ public class Account {
     @Column(nullable = true)
     private String profilePhotoUrl;
 
+    @Column(nullable = true)
+    private String phone;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -101,4 +104,7 @@ public class Account {
 
     public String getProfilePhotoUrl() { return profilePhotoUrl; }
     public void setProfilePhotoUrl(String profilePhotoUrl) { this.profilePhotoUrl = profilePhotoUrl; }
+
+    public String getPhone() { return phone; }
+    public void setPhone(String phone) { this.phone = phone; }
 }

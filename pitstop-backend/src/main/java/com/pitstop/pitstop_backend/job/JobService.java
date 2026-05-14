@@ -49,6 +49,8 @@ public class JobService {
         Double mechanicRating = null;
         Integer mechanicReviewCount = null;
         String mechanicPhotoUrl = null;
+        Double mechanicLat = null;
+        Double mechanicLng = null;
 
         if (job.getMechanicProfileId() != null) {
             MechanicProfile mp = mechanicProfileRepository
@@ -59,11 +61,14 @@ public class JobService {
                 mechanicRating      = mp.getAverageRating();
                 mechanicReviewCount = mp.getReviewCount();
                 mechanicPhotoUrl    = mp.getAccount().getProfilePhotoUrl();
+                mechanicLat         = mp.getLatitude();
+                mechanicLng         = mp.getLongitude();
             }
         }
 
-        String userName = accountRepository.findById(job.getAccountId())
-                .map(Account::getName).orElse(null);
+        Account userAccount = accountRepository.findById(job.getAccountId()).orElse(null);
+        String userName = userAccount != null ? userAccount.getName() : null;
+        String userPhone = userAccount != null ? userAccount.getPhone() : null;
 
         return new JobResponseDto(
                 job.getId(),
@@ -87,7 +92,10 @@ public class JobService {
                 mechanicRating,
                 mechanicReviewCount,
                 userName,
-                mechanicPhotoUrl
+                mechanicPhotoUrl,
+                mechanicLat,
+                mechanicLng,
+                userPhone
         );
     }
 

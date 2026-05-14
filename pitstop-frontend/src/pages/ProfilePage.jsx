@@ -82,6 +82,10 @@ export default function ProfilePage() {
   const [nameInput, setNameInput] = useState("");
   const [saving, setSaving]       = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [phoneInput, setPhoneInput]     = useState("");
+  const [savingPhone, setSavingPhone]   = useState(false);
+  const [savePhoneError, setSavePhoneError] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const inputRef = useRef(null);
@@ -135,6 +139,21 @@ export default function ProfilePage() {
       setSaveError(err.response?.data?.message || "Failed to save");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const savePhone = async () => {
+    if (!phoneInput.trim()) { setSavePhoneError("Phone cannot be blank"); return; }
+    setSavingPhone(true);
+    try {
+      await api.patch("/accounts/phone", { phone: phoneInput.trim() });
+      setProfile(p => ({ ...p, phone: phoneInput.trim() }));
+      updateUser({ phone: phoneInput.trim() });
+      setEditingPhone(false);
+    } catch (err) {
+      setSavePhoneError(err.response?.data?.message || "Failed to save");
+    } finally {
+      setSavingPhone(false);
     }
   };
 
@@ -306,6 +325,45 @@ export default function ProfilePage() {
           <div style={{ fontSize: 10, color: "var(--text-3)", letterSpacing: "1px", textTransform: "uppercase", marginBottom: 4 }}>Email</div>
           <div style={{ fontSize: 14, color: "var(--text-2)" }}>{displayEmail}</div>
         </div>
+
+        {/* ── Phone row (USER only) ── */}
+        {!isMechanic && (
+          <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
+            <div style={{ fontSize: 10, color: "var(--text-3)", letterSpacing: "1px", textTransform: "uppercase", marginBottom: 4 }}>Phone</div>
+            {editingPhone ? (
+              <div>
+                <input
+                  value={phoneInput}
+                  onChange={e => setPhoneInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") savePhone(); if (e.key === "Escape") { setEditingPhone(false); setSavePhoneError(""); }}}
+                  type="tel"
+                  placeholder="+91 98765 43210"
+                  style={{
+                    width: "100%", background: "var(--surface2)", border: "1px solid var(--gold)",
+                    borderRadius: 8, padding: "6px 10px", fontSize: 14, color: "var(--text)",
+                    fontFamily: "var(--font)", outline: "none", boxSizing: "border-box",
+                  }}
+                />
+                {savePhoneError && <p style={{ fontSize: 11, color: "var(--red)", margin: "4px 0 0" }}>{savePhoneError}</p>}
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <button onClick={() => { setEditingPhone(false); setSavePhoneError(""); }} className="ps-btn-ghost" style={{ padding: "5px 14px", fontSize: 12, width: "auto" }}>Cancel</button>
+                  <button onClick={savePhone} disabled={savingPhone} className="ps-btn" style={{ padding: "5px 14px", fontSize: 12, width: "auto", opacity: savingPhone ? 0.6 : 1 }}>
+                    {savingPhone ? "Saving…" : "Save"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 14, color: profile?.phone ? "var(--text-2)" : "var(--text-3)", flex: 1 }}>
+                  {profile?.phone || "Add phone number"}
+                </span>
+                <div onClick={() => { setPhoneInput(profile?.phone || ""); setSavePhoneError(""); setEditingPhone(true); }} style={{ cursor: "pointer", display: "flex", alignItems: "center", padding: 4 }}>
+                  <PencilIcon />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Stats ── */}
         <div style={{ marginBottom: 24 }}>

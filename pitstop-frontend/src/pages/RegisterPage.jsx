@@ -6,7 +6,7 @@ import { useAuth } from "../context/AuthContext";
 export default function RegisterPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", password: "", confirm: "" });
   const [errors, setErrors] = useState({});
   const [globalError, setGlobalError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -16,6 +16,7 @@ export default function RegisterPage() {
     if (!form.name.trim()) e.name = "Name is required";
     if (!form.email.trim()) e.email = "Email is required";
     else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = "Enter a valid email";
+    if (!form.phone.trim()) e.phone = "Phone number is required";
     if (!form.password) e.password = "Password is required";
     else if (form.password.length < 8) e.password = "Minimum 8 characters";
     if (!form.confirm) e.confirm = "Please confirm your password";
@@ -31,6 +32,7 @@ export default function RegisterPage() {
       const res = await axios.post("/auth/register", {
         name: form.name,
         email: form.email,
+        phone: form.phone,
         password: form.password,
         role: "USER",
       });
@@ -164,6 +166,19 @@ export default function RegisterPage() {
             style={inputStyle(errors.email)}
           />
           {errors.email && errorText(errors.email)}
+        </div>
+
+        {/* Phone */}
+        <div style={{ marginBottom: "12px" }}>
+          <label style={labelStyle}>Phone number</label>
+          <input
+            type="tel"
+            placeholder="+91 98765 43210"
+            value={form.phone}
+            onChange={set("phone")}
+            style={inputStyle(errors.phone)}
+          />
+          {errors.phone && errorText(errors.phone)}
         </div>
 
         {/* Password */}

@@ -224,6 +224,13 @@ export default function ActiveJobFloat() {
 
   const withinRange = mechDist !== null && mechDist <= PROXIMITY_THRESHOLD_KM;
 
+  const mechanicDistKm = (!isMechanic
+    && activeJob?.mechanicLat != null
+    && activeJob?.mechanicLng != null)
+    ? haversineKm(activeJob.latitude, activeJob.longitude,
+                  activeJob.mechanicLat, activeJob.mechanicLng)
+    : null;
+
   const accentBorder = isMechanic ? "rgba(255,183,0,0.3)" : "rgba(230,57,70,0.3)";
 
   // Derive "Mark Arrived" button label based on proximity
@@ -521,7 +528,11 @@ export default function ActiveJobFloat() {
                     {isInProgress ? "Mechanic is working on your vehicle" : "Mechanic is on the way"}
                   </div>
                   <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>
-                    {isInProgress ? "Repair in progress" : "Live tracking coming soon"}
+                    {isInProgress
+                      ? "Repair in progress"
+                      : mechanicDistKm !== null
+                        ? `~${mechanicDistKm.toFixed(1)} km away`
+                        : "Locating mechanic…"}
                   </div>
                 </div>
               </div>
@@ -693,19 +704,25 @@ export default function ActiveJobFloat() {
                 </button>
               )}
 
-              {/* MECHANIC: Call button (always shown when on job) */}
-              {isMechanic && (isAccepted || isInProgress) && (
-                <button
-                  onClick={() => window.open("tel:", "_self")}
-                  className="ps-btn-ghost"
-                  style={{ flex: 1, height: 42, fontSize: 12, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}
+              {/* MECHANIC: Call user button */}
+              {isMechanic && (isAccepted || isArrivalRequested || isInProgress) && (
+                <a
+                  href={`tel:${activeJob.userPhone || ''}`}
+                  onTouchStart={e => e.stopPropagation()}
+                  style={{
+                    flex: 1, height: 42, borderRadius: 10,
+                    background: "rgba(230,57,70,0.1)", border: "1px solid rgba(230,57,70,0.25)",
+                    color: "var(--red)", fontSize: 12, fontWeight: 600,
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                    textDecoration: "none",
+                  }}
                 >
-                  <PhoneIcon /> Call
-                </button>
+                  <PhoneIcon /> Call user
+                </a>
               )}
 
-              {/* USER: Call mechanic (ACCEPTED / IN_PROGRESS) — phone always present */}
-              {!isMechanic && (isAccepted || isInProgress) && (
+              {/* USER: Call mechanic (ACCEPTED / ARRIVAL_REQUESTED / IN_PROGRESS) */}
+              {!isMechanic && (isAccepted || isArrivalRequested || isInProgress) && (
                 <a
                   href={`tel:${activeJob.mechanicPhone || ''}`}
                   onTouchStart={e => e.stopPropagation()}
@@ -721,8 +738,8 @@ export default function ActiveJobFloat() {
                 </a>
               )}
 
-              {/* USER: Cancel (PENDING or ACCEPTED only — blocked once IN_PROGRESS or further) */}
-              {!isMechanic && (isPending || isAccepted) && (
+              {/* USER: Cancel (PENDING / ACCEPTED / ARRIVAL_REQUESTED — blocked from COMPLETION_REQUESTED onward) */}
+              {!isMechanic && (isPending || isAccepted || isArrivalRequested) && (
                 <button
                   onClick={() => handleCancel(activeJob.id, activeJob.status)}
                   style={{
