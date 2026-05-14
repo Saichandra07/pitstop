@@ -5,6 +5,7 @@ import com.pitstop.pitstop_backend.account.dto.AvailabilityRequest;
 import com.pitstop.pitstop_backend.auth.JwtUtil;
 import com.pitstop.pitstop_backend.common.dto.LoginResponse;
 import com.pitstop.pitstop_backend.config.CloudinaryService;
+import com.pitstop.pitstop_backend.config.GeocodingService;
 import com.pitstop.pitstop_backend.exception.ResourceNotFoundException;
 import com.pitstop.pitstop_backend.job.BroadcastService;
 import com.pitstop.pitstop_backend.job.JobRepository;
@@ -20,6 +21,7 @@ import com.pitstop.pitstop_backend.account.dto.VerifyMechanicRequest;
 import com.pitstop.pitstop_backend.account.RejectionReason;
 import com.pitstop.pitstop_backend.account.AppealStatus;
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -44,6 +46,9 @@ public class AccountService {
 
     @org.springframework.beans.factory.annotation.Autowired
     private BroadcastService broadcastService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private GeocodingService geocodingService;
 
     public AccountService(
             AccountRepository accountRepository,
@@ -180,10 +185,13 @@ public class AccountService {
                     "Only verified mechanics can change availability");
         }
 
-        if (profile.getLastAvailabilityToggleAt() != null &&
-                Duration.between(profile.getLastAvailabilityToggleAt(), LocalDateTime.now()).toSeconds() < 10) {
-            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
-                    "Please wait before toggling again");
+        if (profile.getLastAvailabilityToggleAt() != null) {
+            long elapsed = Duration.between(profile.getLastAvailabilityToggleAt(), LocalDateTime.now()).toSeconds();
+            if (elapsed < 10) {
+                long remaining = 10 - elapsed;
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                        "Please wait " + remaining + " more second" + (remaining == 1 ? "" : "s") + " before toggling again");
+            }
         }
         profile.setLastAvailabilityToggleAt(LocalDateTime.now());
 
@@ -213,6 +221,16 @@ public class AccountService {
         mechanicProfileRepository.save(profile);
 
         if (goingOnline) {
+            final Long profileId = profile.getId();
+            final double lat = request.latitude();
+            final double lng = request.longitude();
+            CompletableFuture.runAsync(() -> {
+                String area = geocodingService.reverseGeocode(lat, lng);
+                mechanicProfileRepository.findById(profileId).ifPresent(p -> {
+                    p.setArea(area);
+                    mechanicProfileRepository.save(p);
+                });
+            });
             broadcastService.notifyNewlyOnlineMechanic(profile);
         }
     }

@@ -258,7 +258,8 @@ export default function MechanicDashboardPage() {
     try { return JSON.parse(localStorage.getItem('pitstop_notif_prefs') || '{}'); }
     catch { return {}; }
   });
-  const snackbarTimer = useRef(null);
+  const snackbarTimer   = useRef(null);
+  const lastToggleRef   = useRef(null);
 
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [dragging, setDragging]           = useState(false);
@@ -327,6 +328,7 @@ export default function MechanicDashboardPage() {
     const doToggle = async (latitude, longitude) => {
       try {
         await api.patch("/accounts/availability", { isAvailable: goingOnline, latitude, longitude });
+        lastToggleRef.current = Date.now();
         await fetchMe();
         if (goingOnline) fetchPendingJobs();
         else clearBroadcastTracking();
@@ -335,7 +337,11 @@ export default function MechanicDashboardPage() {
         if (s === 409)      showSnackbar("Complete your active job first", "warning");
         else if (s === 403) showSnackbar("Only verified mechanics can change availability", "error");
         else if (s === 400) showSnackbar("Location required to go online", "error");
-        else                showSnackbar("Something went wrong", "error");
+        else if (s === 429) {
+          const elapsed  = lastToggleRef.current ? Math.floor((Date.now() - lastToggleRef.current) / 1000) : 0;
+          const remaining = Math.max(1, 10 - elapsed);
+          showSnackbar(`Please wait ${remaining}s before toggling again`, "warning");
+        } else              showSnackbar("Something went wrong", "error");
       } finally {
         setTogglingAvail(false);
       }

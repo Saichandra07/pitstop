@@ -1,5 +1,6 @@
 package com.pitstop.pitstop_backend.auth;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -20,6 +21,9 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+
+    @Value("${cors.allowed.origins}")
+    private String allowedOrigins;
 
     private final JwtFilter jwtFilter;
 
@@ -119,7 +123,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173"));
+        config.setAllowedOrigins(List.of(allowedOrigins.split(",")));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
