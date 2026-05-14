@@ -122,6 +122,12 @@ public class BroadcastService {
         MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "No mechanic profile found"));
+
+        if (profile.getVerificationStatus() != VerificationStatus.VERIFIED) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Your account is suspended or not verified");
+        }
+
         Long mechanicProfileId = profile.getId();
 
         Job job = jobRepository.findById(jobId)
@@ -216,6 +222,9 @@ public class BroadcastService {
         profile.setLatitude(profile.getLastKnownLatitude());
         profile.setLongitude(profile.getLastKnownLongitude());
 
+        // Every abandon counts against the trust profile — always increment
+        profile.setMidJobCancels(profile.getMidJobCancels() + 1);
+
         AbandonResponse response;
         if (acceptedCount >= 2) {
             // Second abandon on same job — permanent block + day suspension
@@ -223,7 +232,6 @@ public class BroadcastService {
             profile.setVerificationStatus(VerificationStatus.SUSPENDED);
             profile.setSuspensionEndsAt(LocalDate.now().atTime(23, 59, 59));
             profile.setSuspensionReason("Double abandonment on Job #" + jobId + " — suspended until midnight");
-            profile.setMidJobCancels(profile.getMidJobCancels() + 1);
             response = new AbandonResponse(false, job.getId(), job.getProblemType().name(),
                     job.getVehicleType().name(), job.getVehicleName(), job.getArea());
         } else {

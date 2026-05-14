@@ -237,12 +237,21 @@ public class JobService {
 
         return jobRepository.findByStatus(JobStatus.PENDING)
                 .stream()
-                .filter(job -> mechanicExpertiseRepository
-                        .existsByMechanicProfileIdAndWheelerTypeAndProblemType(
-                                profile.getId(),
-                                job.getVehicleType(),
-                                job.getProblemType()
-                        ))
+                .filter(job -> {
+                    // DONT_KNOW = broadcast to all mechanics covering that vehicleType;
+                    // only check vehicleType expertise, not problemType
+                    if (job.getProblemType() == ProblemType.DONT_KNOW) {
+                        return mechanicExpertiseRepository
+                                .existsByMechanicProfileIdAndWheelerType(
+                                        profile.getId(), job.getVehicleType());
+                    }
+                    return mechanicExpertiseRepository
+                            .existsByMechanicProfileIdAndWheelerTypeAndProblemType(
+                                    profile.getId(),
+                                    job.getVehicleType(),
+                                    job.getProblemType()
+                            );
+                })
                 // Exclude jobs this mechanic has already received a broadcast for (including abandoned ones).
                 .filter(job -> !jobBroadcastRepository.existsByJobIdAndMechanicProfileId(
                         job.getId(), profile.getId()
@@ -320,14 +329,22 @@ public class JobService {
         job.setStatus(JobStatus.CANCELLED);
         jobRepository.save(job);
 
-        // Post-acceptance cancels waste the mechanic's time — 2 in a rolling window triggers a 2hr SOS block
+        // Post-acceptance cancels: 1st = no penalty, 2nd = warning, 3rd in 30 days = 24hr timeout.
+        // Each subsequent cancel within the same 30-day window doubles the timeout duration.
         if (wasAccepted) {
             Account acc = accountRepository.findById(accountId).orElse(null);
             if (acc != null) {
-                acc.setSosCancelCount(acc.getSosCancelCount() + 1);
-                if (acc.getSosCancelCount() >= 2) {
-                    acc.setSosTimeoutUntil(java.time.LocalDateTime.now().plusHours(2));
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                // Start a fresh 30-day window if none exists or the previous one expired
+                if (acc.getSosCancelCountResetAt() == null || acc.getSosCancelCountResetAt().isBefore(now)) {
                     acc.setSosCancelCount(0);
+                    acc.setSosCancelCountResetAt(now.plusDays(30));
+                }
+                acc.setSosCancelCount(acc.getSosCancelCount() + 1);
+                if (acc.getSosCancelCount() >= 3) {
+                    // 3rd = 24hr, 4th = 48hr, 5th = 96hr ...
+                    long hours = (long) (24 * Math.pow(2, acc.getSosCancelCount() - 3));
+                    acc.setSosTimeoutUntil(now.plusHours(hours));
                 }
                 accountRepository.save(acc);
             }

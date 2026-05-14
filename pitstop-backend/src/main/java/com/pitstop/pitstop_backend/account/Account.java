@@ -24,13 +24,13 @@ public class Account {
     @Column(nullable = false)
     private Role role;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = true)
-    private UpgradeStatus upgradeStatus;
-
-    // Counts post-acceptance cancellations — resets after 30 days (enforced in service)
+    // Counts post-acceptance cancellations within the 30-day window
     @Column(nullable = false)
     private Integer sosCancelCount = 0;
+
+    // When the current 30-day cancel window expires — set on first cancel in a new window
+    @Column(nullable = true)
+    private LocalDateTime sosCancelCountResetAt;
 
     // If set, user cannot send SOS until this timestamp passes
     @Column(nullable = true)
@@ -78,11 +78,11 @@ public class Account {
     public Role getRole() { return role; }
     public void setRole(Role role) { this.role = role; }
 
-    public UpgradeStatus getUpgradeStatus() { return upgradeStatus; }
-    public void setUpgradeStatus(UpgradeStatus upgradeStatus) { this.upgradeStatus = upgradeStatus; }
-
     public Integer getSosCancelCount() { return sosCancelCount; }
     public void setSosCancelCount(Integer sosCancelCount) { this.sosCancelCount = sosCancelCount; }
+
+    public LocalDateTime getSosCancelCountResetAt() { return sosCancelCountResetAt; }
+    public void setSosCancelCountResetAt(LocalDateTime sosCancelCountResetAt) { this.sosCancelCountResetAt = sosCancelCountResetAt; }
 
     public LocalDateTime getSosTimeoutUntil() { return sosTimeoutUntil; }
     public void setSosTimeoutUntil(LocalDateTime sosTimeoutUntil) { this.sosTimeoutUntil = sosTimeoutUntil; }

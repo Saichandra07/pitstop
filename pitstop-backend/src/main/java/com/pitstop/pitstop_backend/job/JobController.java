@@ -6,9 +6,11 @@ import com.pitstop.pitstop_backend.job.dto.AdminReportResponse;
 import com.pitstop.pitstop_backend.job.dto.BroadcastJobResponse;
 import com.pitstop.pitstop_backend.job.dto.JobResponseDto;
 import com.pitstop.pitstop_backend.job.dto.ReportRequestDto;
+import com.pitstop.pitstop_backend.account.RateLimiterService;
 import com.pitstop.pitstop_backend.job.dto.SosRequestDto;
 import com.pitstop.pitstop_backend.review.ReviewService;
 import com.pitstop.pitstop_backend.review.dto.ReviewRequestDto;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,15 +31,17 @@ public class JobController {
     private final BroadcastService broadcastService;
     private final ReviewService reviewService;
     private final ReportService reportService;
+    private final RateLimiterService rateLimiterService;
 
     public JobController(JobService jobService, CloudinaryService cloudinaryService,
                          BroadcastService broadcastService, ReviewService reviewService,
-                         ReportService reportService) {
+                         ReportService reportService, RateLimiterService rateLimiterService) {
         this.jobService = jobService;
         this.cloudinaryService = cloudinaryService;
         this.broadcastService = broadcastService;
         this.reviewService = reviewService;
         this.reportService = reportService;
+        this.rateLimiterService = rateLimiterService;
     }
 
     // POST /api/jobs/logout — USER: cancel any active job on logout, fires WS so mechanics update instantly
@@ -49,7 +53,9 @@ public class JobController {
 
     // POST /api/jobs/sos — USER only (SecurityConfig)
     @PostMapping("/sos")
-    public ResponseEntity<JobResponseDto> createSos(@Valid @RequestBody SosRequestDto dto) {
+    public ResponseEntity<JobResponseDto> createSos(@Valid @RequestBody SosRequestDto dto,
+                                                    HttpServletRequest httpRequest) {
+        rateLimiterService.checkAndRecord(getClientIp(httpRequest) + ":sos", 5, 60);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(jobService.createSosRequest(getAccountId(), dto));
     }
@@ -255,5 +261,12 @@ public class JobController {
     private Long getAccountId() {
         return (Long) SecurityContextHolder.getContext()
                 .getAuthentication().getPrincipal();
+    }
+
+    private String getClientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        return (forwarded != null && !forwarded.isBlank())
+                ? forwarded.split(",")[0].trim()
+                : request.getRemoteAddr();
     }
 }

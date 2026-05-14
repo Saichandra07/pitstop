@@ -17,6 +17,12 @@ public interface MechanicExpertiseRepository extends JpaRepository<MechanicExper
             ProblemType problemType
     );
 
+    // Used for DONT_KNOW jobs — only vehicleType matters, any problem expertise counts
+    boolean existsByMechanicProfileIdAndWheelerType(
+            Long mechanicProfileId,
+            VehicleType wheelerType
+    );
+
     // Used in expertise edit — wipe all rows for this mechanic before re-inserting
     @Modifying
     @Transactional
