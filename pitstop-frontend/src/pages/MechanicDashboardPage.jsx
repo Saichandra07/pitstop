@@ -96,14 +96,81 @@ function RejectedWall({ reason, onLogout, onResubmit }) {
   );
 }
 
-function SuspendedWall({ onLogout }) {
+function SuspendedWall({ me, onLogout, onAppealSuccess }) {
+  const [reason, setReason]       = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError]         = useState(null);
+
+  const appealStatus = me?.appealStatus;
+  const canSubmit = !appealStatus || appealStatus === "NONE" || appealStatus === "REJECTED";
+
+  async function handleSubmit() {
+    if (!reason.trim() || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await api.post("/accounts/appeal", { reason: reason.trim() });
+      setReason("");
+      await onAppealSuccess();
+    } catch (err) {
+      const s = err.response?.status;
+      if (s === 409)      setError("Appeal already pending.");
+      else if (s === 400) setError("Please provide a reason.");
+      else                setError("Failed to submit appeal. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div className="ps-wall">
       <div style={{ width: 56, height: 56, borderRadius: "50%", background: "var(--red-soft)", border: "1px solid var(--red-border)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="var(--red)" strokeWidth="1.5"/><path d="M12 8v5M12 16h.01" stroke="var(--red)" strokeWidth="1.5" strokeLinecap="round"/></svg>
       </div>
       <p className="ps-wall-title">Account suspended</p>
-      <p className="ps-wall-sub">Your account has been temporarily suspended. Contact support if you believe this is an error.</p>
+
+      {me?.suspensionReason && (
+        <div className="ps-card" style={{ width: "100%", maxWidth: 320, marginBottom: 20, textAlign: "left" }}>
+          <div className="ps-section-label">Reason</div>
+          <div style={{ fontSize: 13, color: "var(--text-2)", marginTop: 4 }}>{me.suspensionReason}</div>
+        </div>
+      )}
+
+      {appealStatus === "PENDING" ? (
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <span className="ps-tag ps-tag-gold">Appeal pending</span>
+          <p className="ps-wall-sub" style={{ marginTop: 12 }}>Your appeal is under review. You'll be notified once it's resolved.</p>
+        </div>
+      ) : canSubmit ? (
+        <div style={{ width: "100%", maxWidth: 320, marginBottom: 20 }}>
+          {appealStatus === "REJECTED" && (
+            <p style={{ fontSize: 12, color: "var(--red)", marginBottom: 12, textAlign: "center" }}>
+              Your previous appeal was rejected. You may resubmit.
+            </p>
+          )}
+          <textarea
+            placeholder="Explain why your suspension should be lifted…"
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            style={{
+              width: "100%", minHeight: 90, borderRadius: 12,
+              background: "var(--surface2)", border: "1px solid var(--border)",
+              color: "var(--text)", fontSize: 13, padding: "10px 12px",
+              resize: "vertical", fontFamily: "inherit", boxSizing: "border-box",
+            }}
+          />
+          {error && <p style={{ fontSize: 12, color: "var(--red)", marginTop: 6 }}>{error}</p>}
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || !reason.trim()}
+            className="ps-btn"
+            style={{ marginTop: 10, opacity: (submitting || !reason.trim()) ? 0.5 : 1 }}
+          >
+            {submitting ? "Submitting…" : "Submit Appeal"}
+          </button>
+        </div>
+      ) : null}
+
       <button onClick={onLogout} className="ps-btn-ghost" style={{ maxWidth: 200 }}>Logout</button>
     </div>
   );
@@ -331,7 +398,7 @@ export default function MechanicDashboardPage() {
   if (me.verificationStatus === "REJECTED")
     return <RejectedWall reason={me.rejectionReason} onLogout={handleLogout} onResubmit={() => navigate("/register/mechanic")} />;
   if (me.verificationStatus === "SUSPENDED")
-    return <SuspendedWall onLogout={handleLogout} />;
+    return <SuspendedWall me={me} onLogout={handleLogout} onAppealSuccess={fetchMe} />;
 
   // ── Derived ────────────────────────────────────────────────────────────────
 

@@ -2,8 +2,10 @@ package com.pitstop.pitstop_backend.job;
 
 import com.pitstop.pitstop_backend.job.dto.AbandonResponse;
 import com.pitstop.pitstop_backend.job.dto.AdminJobResponse;
+import com.pitstop.pitstop_backend.job.dto.AdminReportResponse;
 import com.pitstop.pitstop_backend.job.dto.BroadcastJobResponse;
 import com.pitstop.pitstop_backend.job.dto.JobResponseDto;
+import com.pitstop.pitstop_backend.job.dto.ReportRequestDto;
 import com.pitstop.pitstop_backend.job.dto.SosRequestDto;
 import com.pitstop.pitstop_backend.review.ReviewService;
 import com.pitstop.pitstop_backend.review.dto.ReviewRequestDto;
@@ -26,13 +28,16 @@ public class JobController {
     private final CloudinaryService cloudinaryService;
     private final BroadcastService broadcastService;
     private final ReviewService reviewService;
+    private final ReportService reportService;
 
     public JobController(JobService jobService, CloudinaryService cloudinaryService,
-                         BroadcastService broadcastService, ReviewService reviewService) {
+                         BroadcastService broadcastService, ReviewService reviewService,
+                         ReportService reportService) {
         this.jobService = jobService;
         this.cloudinaryService = cloudinaryService;
         this.broadcastService = broadcastService;
         this.reviewService = reviewService;
+        this.reportService = reportService;
     }
 
     // POST /api/jobs/logout — USER: cancel any active job on logout, fires WS so mechanics update instantly
@@ -220,6 +225,29 @@ public class JobController {
     public ResponseEntity<Void> submitReview(@PathVariable Long id,
                                              @Valid @RequestBody ReviewRequestDto dto) {
         reviewService.submitReview(id, getAccountId(), dto);
+        return ResponseEntity.ok().build();
+    }
+
+    // POST /api/jobs/{id}/report — USER only (SecurityConfig)
+    @PostMapping("/{id}/report")
+    public ResponseEntity<Void> submitReport(@PathVariable Long id,
+                                             @Valid @RequestBody ReportRequestDto dto) {
+        reportService.submitReport(getAccountId(), id, dto.reason(), dto.description());
+        return ResponseEntity.ok().build();
+    }
+
+    // GET /api/admin/reports — ADMIN only
+    @GetMapping("/admin/reports")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<AdminReportResponse>> getAdminReports() {
+        return ResponseEntity.ok(reportService.getAdminReports());
+    }
+
+    // POST /api/admin/reports/{id}/resolve — ADMIN only
+    @PostMapping("/admin/reports/{id}/resolve")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> resolveReport(@PathVariable Long id) {
+        reportService.resolveReport(id);
         return ResponseEntity.ok().build();
     }
 

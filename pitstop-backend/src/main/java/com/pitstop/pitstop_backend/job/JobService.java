@@ -48,6 +48,7 @@ public class JobService {
         String mechanicPhone = null;
         Double mechanicRating = null;
         Integer mechanicReviewCount = null;
+        String mechanicPhotoUrl = null;
 
         if (job.getMechanicProfileId() != null) {
             MechanicProfile mp = mechanicProfileRepository
@@ -57,6 +58,7 @@ public class JobService {
                 mechanicPhone       = mp.getPhone();
                 mechanicRating      = mp.getAverageRating();
                 mechanicReviewCount = mp.getReviewCount();
+                mechanicPhotoUrl    = mp.getAccount().getProfilePhotoUrl();
             }
         }
 
@@ -84,7 +86,8 @@ public class JobService {
                 mechanicPhone,
                 mechanicRating,
                 mechanicReviewCount,
-                userName
+                userName,
+                mechanicPhotoUrl
         );
     }
 
@@ -97,7 +100,8 @@ public class JobService {
         // "Live" = PENDING, ACCEPTED, or IN_PROGRESS.
         boolean hasActiveJob = jobRepository.existsByAccountIdAndStatusIn(
                 accountId,
-                List.of(JobStatus.PENDING, JobStatus.ACCEPTED, JobStatus.IN_PROGRESS)
+                List.of(JobStatus.PENDING, JobStatus.ACCEPTED, JobStatus.ARRIVAL_REQUESTED,
+                        JobStatus.IN_PROGRESS, JobStatus.COMPLETION_REQUESTED)
         );
         if (hasActiveJob) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -290,6 +294,8 @@ public class JobService {
         }
 
         boolean wasPending = job.getStatus() == JobStatus.PENDING;
+        boolean wasAccepted = job.getStatus() == JobStatus.ACCEPTED
+                || job.getStatus() == JobStatus.ARRIVAL_REQUESTED;
 
         // Collect mechanics who currently have SENT broadcasts for this job BEFORE expiring.
         // For PENDING jobs these are the mechanics seeing this job in their BroadcastOverlay —
@@ -306,13 +312,14 @@ public class JobService {
         job.setStatus(JobStatus.CANCELLED);
         jobRepository.save(job);
 
-        // Pre-acceptance cancels are free but tracked — 3+ within the window triggers a 24hr SOS timeout
-        if (wasPending) {
+        // Post-acceptance cancels waste the mechanic's time — 2 in a rolling window triggers a 2hr SOS block
+        if (wasAccepted) {
             Account acc = accountRepository.findById(accountId).orElse(null);
             if (acc != null) {
                 acc.setSosCancelCount(acc.getSosCancelCount() + 1);
-                if (acc.getSosCancelCount() >= 3) {
-                    acc.setSosTimeoutUntil(java.time.LocalDateTime.now().plusHours(1));
+                if (acc.getSosCancelCount() >= 2) {
+                    acc.setSosTimeoutUntil(java.time.LocalDateTime.now().plusHours(2));
+                    acc.setSosCancelCount(0);
                 }
                 accountRepository.save(acc);
             }

@@ -15,5 +15,6 @@ public record AdminMechanicResponse(
         String suspensionReason,
         String suspensionEndsAt,
         String appealStatus,
+        String appealReason,
         String rejectionReason
 ) {}

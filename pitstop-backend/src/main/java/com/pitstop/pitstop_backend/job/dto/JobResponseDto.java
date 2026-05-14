@@ -29,6 +29,7 @@ public class JobResponseDto {
     private Double mechanicRating;
     private Integer mechanicReviewCount;
     private String userName;
+    private String mechanicPhotoUrl;
 
     public JobResponseDto(Long id, Long accountId, Long mechanicProfileId,
                           JobStatus status, VehicleType vehicleType, ProblemType problemType,
@@ -38,7 +39,7 @@ public class JobResponseDto {
                           CancellationReason cancellationReason,
                           String mechanicName, String mechanicPhone,
                           Double mechanicRating, Integer mechanicReviewCount,
-                          String userName) {
+                          String userName, String mechanicPhotoUrl) {
         this.id = id;
         this.accountId = accountId;
         this.mechanicProfileId = mechanicProfileId;
@@ -60,6 +61,7 @@ public class JobResponseDto {
         this.mechanicRating = mechanicRating;
         this.mechanicReviewCount = mechanicReviewCount;
         this.userName = userName;
+        this.mechanicPhotoUrl = mechanicPhotoUrl;
     }
 
     public Long getId() { return id; }
@@ -83,4 +85,5 @@ public class JobResponseDto {
     public Double getMechanicRating() { return mechanicRating; }
     public Integer getMechanicReviewCount() { return mechanicReviewCount; }
     public String getUserName() { return userName; }
+    public String getMechanicPhotoUrl() { return mechanicPhotoUrl; }
 }

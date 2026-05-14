@@ -47,6 +47,9 @@ public class Account {
     @Column(nullable = false)
     private boolean emailVerified = false;
 
+    @Column(nullable = true)
+    private String profilePhotoUrl;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -95,4 +98,7 @@ public class Account {
     }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
+
+    public String getProfilePhotoUrl() { return profilePhotoUrl; }
+    public void setProfilePhotoUrl(String profilePhotoUrl) { this.profilePhotoUrl = profilePhotoUrl; }
 }

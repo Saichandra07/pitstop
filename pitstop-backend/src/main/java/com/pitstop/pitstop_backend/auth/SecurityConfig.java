@@ -72,12 +72,20 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/api/accounts/availability").hasRole("MECHANIC")
                         // Restricts PATCH requests to /api/accounts/expertise to users with the MECHANIC role.
                         .requestMatchers(HttpMethod.PATCH, "/api/accounts/expertise").hasRole("MECHANIC")
+                        // Profile photo upload — MECHANIC only
+                        .requestMatchers(HttpMethod.POST, "/api/accounts/profile-photo").hasRole("MECHANIC")
+                        // Heartbeat ping during active job — MECHANIC only
+                        .requestMatchers(HttpMethod.POST, "/api/mechanic/heartbeat").hasRole("MECHANIC")
+                        // Appeal submission — MECHANIC only
+                        .requestMatchers(HttpMethod.POST, "/api/accounts/appeal").hasRole("MECHANIC")
 
                         // ── USER only ───────────────────────────────────────────────
                         // Submit SOS
                         .requestMatchers(HttpMethod.POST, "/api/jobs/sos").hasRole("USER")
                         // Submit a review after job completion
                         .requestMatchers(HttpMethod.POST, "/api/jobs/*/review").hasRole("USER")
+                        // Submit a report during or after a job
+                        .requestMatchers(HttpMethod.POST, "/api/jobs/*/report").hasRole("USER")
                         // Cancel their own job
                         .requestMatchers(HttpMethod.PATCH, "/api/jobs/*/cancel").hasRole("USER")
                         // Mutual confirmation — user confirms or rejects mechanic's status requests

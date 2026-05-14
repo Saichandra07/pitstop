@@ -14,6 +14,8 @@ public interface MechanicProfileRepository extends JpaRepository<MechanicProfile
 
     List<MechanicProfile> findByVerificationStatus(VerificationStatus status);
 
+    List<MechanicProfile> findByAppealStatus(AppealStatus appealStatus);
+
     List<MechanicProfile> findByVerificationStatusAndSuspensionEndsAtBefore(VerificationStatus status, java.time.LocalDateTime cutoff);
 
     List<MechanicProfile> findAll();

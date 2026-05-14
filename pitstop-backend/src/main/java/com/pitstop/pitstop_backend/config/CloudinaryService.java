@@ -19,6 +19,10 @@ public class CloudinaryService {
     }
 
     public String upload(MultipartFile file) throws IOException {
+        return upload(file, "pitstop/jobs");
+    }
+
+    public String upload(MultipartFile file, String folder) throws IOException {
         String contentType = file.getContentType();
         if (contentType == null || !List.of("image/jpeg", "image/png", "image/webp").contains(contentType)) {
             throw new IOException("Only JPEG, PNG and WebP images are allowed");
@@ -29,7 +33,7 @@ public class CloudinaryService {
 
         Map<?, ?> result = cloudinary.uploader().upload(
                 file.getBytes(),
-                ObjectUtils.asMap("folder", "pitstop/jobs")
+                ObjectUtils.asMap("folder", folder)
         );
         return (String) result.get("secure_url");
     }

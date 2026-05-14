@@ -101,16 +101,12 @@ export function BroadcastProvider({ children }) {
     mechActedRef.current[broadcastId] = true;
     try {
       await api.post(`/jobs/${jobId}/decline`);
-      setBroadcasts(prev => prev.filter(b => b.broadcastId !== broadcastId));
-    } catch (err) {
-      const status = err.response?.status;
-      if (status === 409 || status === 404) {
-        setBroadcasts(prev => prev.filter(b => b.broadcastId !== broadcastId));
-      } else {
-        showSnackbar(err.response?.data?.message || "Could not decline", "error");
-      }
+    } catch {
+      // Decline is best-effort — broadcast may already be expired, reassigned, or taken.
+      // Always remove the card silently; no error is useful to show the mechanic here.
     }
-  }, [showSnackbar]);
+    setBroadcasts(prev => prev.filter(b => b.broadcastId !== broadcastId));
+  }, []);
 
   // Called by dedicated "Abandon job" button — shows offer screen after response.
   const handleAbandon = useCallback(async (jobId) => {

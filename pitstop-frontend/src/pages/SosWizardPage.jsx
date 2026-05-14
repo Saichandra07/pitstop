@@ -209,7 +209,7 @@ export default function SOSWizardPage() {
 
   function handleCancel() { clearDraft(); navigate("/dashboard"); }
 
-  const canSend = vehicleName.trim() && gpsReady && !uploading && !submitting;
+  const canSend = vehicleName.trim() && (gpsReady || gpsError) && !uploading && !submitting;
 
   // ─── Shared TopBar cancel button ─────────────────────────────────────────
   const CancelBtn = (

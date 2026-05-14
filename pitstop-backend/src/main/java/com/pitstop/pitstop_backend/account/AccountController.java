@@ -19,6 +19,8 @@ import com.pitstop.pitstop_backend.account.dto.VerifyMechanicRequest;
 import com.pitstop.pitstop_backend.account.RejectionReason;
 import org.springframework.web.server.ResponseStatusException;
 
+import org.springframework.web.multipart.MultipartFile;
+
 import java.security.Principal;
 import java.util.List;
 import java.util.Map;
@@ -229,6 +231,48 @@ public class AccountController {
     public ResponseEntity<Void> updateName(@RequestBody Map<String, String> body) {
         accountService.updateName(getAccountId(), body.get("name"));
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/mechanic/heartbeat")
+    public ResponseEntity<Void> heartbeat() {
+        accountService.updateHeartbeat(getAccountId());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/accounts/profile-photo")
+    public ResponseEntity<Map<String, String>> uploadProfilePhoto(
+            @RequestParam("file") MultipartFile file) {
+        String url = accountService.uploadProfilePhoto(getAccountId(), file);
+        return ResponseEntity.ok(Map.of("photoUrl", url));
+    }
+
+    // ── Appeal endpoints ────────────────────────────────────────────────────
+
+    @PostMapping("/accounts/appeal")
+    @PreAuthorize("hasRole('MECHANIC')")
+    public ResponseEntity<Void> submitAppeal(@Valid @RequestBody AppealRequest body) {
+        accountService.submitAppeal(getAccountId(), body.reason());
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/admin/appeals")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<AdminMechanicResponse>> getPendingAppeals() {
+        return ResponseEntity.ok(accountService.getPendingAppeals());
+    }
+
+    @PostMapping("/admin/appeals/{mechanicProfileId}/approve")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> approveAppeal(@PathVariable Long mechanicProfileId) {
+        accountService.adminApproveAppeal(mechanicProfileId);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/admin/appeals/{mechanicProfileId}/reject")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> rejectAppeal(@PathVariable Long mechanicProfileId) {
+        accountService.adminRejectAppeal(mechanicProfileId);
+        return ResponseEntity.ok().build();
     }
 
 }

@@ -82,7 +82,10 @@ export default function ProfilePage() {
   const [nameInput, setNameInput] = useState("");
   const [saving, setSaving]       = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -132,6 +135,28 @@ export default function ProfilePage() {
       setSaveError(err.response?.data?.message || "Failed to save");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadError("");
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await api.post("/accounts/profile-photo", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const url = res.data.photoUrl;
+      setProfile(p => ({ ...p, profilePhotoUrl: url }));
+      updateUser({ profilePhotoUrl: url });
+    } catch (err) {
+      setUploadError(err.response?.data?.message || "Upload failed");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
     }
   };
 
@@ -186,11 +211,47 @@ export default function ProfilePage() {
 
         {/* ── Hero ── */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 28 }}>
-          <Avatar
-            name={displayName}
-            size="lg"
-            variant={isMechanic ? "gold" : "red"}
-          />
+          {/* Hidden file input — mechanics only */}
+          {isMechanic && (
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              style={{ display: "none" }}
+              onChange={handlePhotoChange}
+            />
+          )}
+
+          <div style={{ position: "relative" }}>
+            <Avatar
+              name={displayName}
+              size="lg"
+              variant={isMechanic ? "gold" : "red"}
+              src={profile?.profilePhotoUrl || user?.profilePhotoUrl}
+              onClick={isMechanic ? () => fileInputRef.current?.click() : undefined}
+            />
+            {isMechanic && (
+              <div style={{
+                position: "absolute", bottom: 0, right: 0,
+                width: 22, height: 22, borderRadius: "50%",
+                background: "var(--surface2)", border: "1.5px solid var(--border)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                pointerEvents: "none",
+              }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" stroke="var(--text-3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <circle cx="12" cy="13" r="4" stroke="var(--text-3)" strokeWidth="1.5"/>
+                </svg>
+              </div>
+            )}
+          </div>
+
+          {uploading && (
+            <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6 }}>Uploading…</div>
+          )}
+          {uploadError && (
+            <div style={{ fontSize: 11, color: "var(--red)", marginTop: 6 }}>{uploadError}</div>
+          )}
 
           {/* Name row */}
           <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 8 }}>

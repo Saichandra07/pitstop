@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.ArrayList;
 
 @Component
 @ConditionalOnProperty(name = "broadcast.scheduler.enabled", havingValue = "true", matchIfMissing = true)
@@ -54,6 +55,35 @@ public class BroadcastScheduler {
             //         OR ring was empty in this lifecycle — no broadcasts created (currentLifecycleCount == 0)
             if (sentCount > 0 || currentLifecycleCount == 0) {
                 broadcastService.advanceOrTimeout(job);
+            }
+        }
+    }
+
+    // Runs every 60s — finds mechanics with stale heartbeats during active jobs and triggers
+    // involuntary abandon (rebroadcast + penalty), matching the spec's 5-minute offline rule.
+    @Scheduled(fixedDelay = 60_000)
+    public void checkStaleHeartbeats() {
+        List<JobStatus> activeStatuses = List.of(
+                JobStatus.ACCEPTED, JobStatus.ARRIVAL_REQUESTED,
+                JobStatus.IN_PROGRESS, JobStatus.COMPLETION_REQUESTED
+        );
+        LocalDateTime staleAt = LocalDateTime.now().minusMinutes(5);
+
+        for (Job job : jobRepository.findByStatusIn(activeStatuses)) {
+            if (job.getMechanicProfileId() == null) continue;
+
+            MechanicProfile mp = mechanicProfileRepository
+                    .findById(job.getMechanicProfileId()).orElse(null);
+            if (mp == null) continue;
+
+            // null = mechanic hasn't heartbeated yet (pre-feature or just accepted) — skip
+            if (mp.getLastHeartbeatAt() == null) continue;
+            if (!mp.getLastHeartbeatAt().isBefore(staleAt)) continue;
+
+            try {
+                broadcastService.mechanicAbandon(job.getId(), mp.getAccount().getId());
+            } catch (Exception ignored) {
+                // Race condition — job may have ended between query and this call
             }
         }
     }

@@ -4,6 +4,7 @@ import com.pitstop.pitstop_backend.account.dto.*;
 import com.pitstop.pitstop_backend.account.dto.AvailabilityRequest;
 import com.pitstop.pitstop_backend.auth.JwtUtil;
 import com.pitstop.pitstop_backend.common.dto.LoginResponse;
+import com.pitstop.pitstop_backend.config.CloudinaryService;
 import com.pitstop.pitstop_backend.exception.ResourceNotFoundException;
 import com.pitstop.pitstop_backend.job.BroadcastService;
 import com.pitstop.pitstop_backend.job.JobRepository;
@@ -12,10 +13,13 @@ import com.pitstop.pitstop_backend.job.ProblemType;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 import com.pitstop.pitstop_backend.account.dto.MechanicPendingResponse;
 import com.pitstop.pitstop_backend.account.dto.VerifyMechanicRequest;
 import com.pitstop.pitstop_backend.account.RejectionReason;
+import com.pitstop.pitstop_backend.account.AppealStatus;
+import java.io.IOException;
 import java.util.stream.Collectors;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -36,6 +40,7 @@ public class AccountService {
     private final EmailService emailService;
     private final JobRepository jobRepository;
     private final RateLimiterService rateLimiterService;
+    private final CloudinaryService cloudinaryService;
 
     @org.springframework.beans.factory.annotation.Autowired
     private BroadcastService broadcastService;
@@ -51,7 +56,8 @@ public class AccountService {
             EmailVerificationTokenRepository emailVerificationTokenRepository,
             EmailService emailService,
             JobRepository jobRepository,
-            RateLimiterService rateLimiterService
+            RateLimiterService rateLimiterService,
+            CloudinaryService cloudinaryService
             ) {
         this.accountRepository = accountRepository;
         this.passwordEncoder = passwordEncoder;
@@ -64,6 +70,7 @@ public class AccountService {
         this.emailService = emailService;
         this.jobRepository = jobRepository;
         this.rateLimiterService = rateLimiterService;
+        this.cloudinaryService = cloudinaryService;
     }
 
 
@@ -323,7 +330,9 @@ public class AccountService {
                     hasExpertise,
                     profile.getAverageRating(),
                     profile.getReviewCount(),
-                    profile.getTotalJobsCompleted()
+                    profile.getTotalJobsCompleted(),
+                    account.getProfilePhotoUrl(),
+                    profile.getAppealStatus() != null ? profile.getAppealStatus().name() : null
             );
         }
 
@@ -332,7 +341,7 @@ public class AccountService {
                 account.getName(),
                 account.getEmail(),
                 account.getRole().name(),
-                null, null, null, null, null, null, null  // USER — no mechanic fields
+                null, null, null, null, null, null, null, null, null  // USER — no mechanic fields
         );
     }
 
@@ -451,7 +460,8 @@ public class AccountService {
                 mp.getMidJobCancels(),
                 mp.getSuspensionReason(),
                 mp.getSuspensionEndsAt() != null ? mp.getSuspensionEndsAt().toString() : null,
-                mp.getAppealStatus().name(),
+                mp.getAppealStatus() != null ? mp.getAppealStatus().name() : null,
+                mp.getAppealReason(),
                 mp.getRejectionReason()
         )).collect(Collectors.toList());
     }
@@ -494,6 +504,65 @@ public class AccountService {
         mechanicProfileRepository.save(mp);
     }
 
+    public void submitAppeal(Long accountId, String reason) {
+        MechanicProfile mp = mechanicProfileRepository.findByAccountId(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Mechanic profile not found"));
+        if (mp.getVerificationStatus() != VerificationStatus.SUSPENDED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Account is not suspended");
+        }
+        if (mp.getAppealStatus() == AppealStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "An appeal is already pending review");
+        }
+        mp.setAppealReason(reason);
+        mp.setAppealStatus(AppealStatus.PENDING);
+        mechanicProfileRepository.save(mp);
+    }
+
+    public List<AdminMechanicResponse> getPendingAppeals() {
+        return mechanicProfileRepository.findByAppealStatus(AppealStatus.PENDING)
+                .stream().map(mp -> new AdminMechanicResponse(
+                        mp.getId(),
+                        mp.getAccount().getId(),
+                        mp.getAccount().getName(),
+                        mp.getAccount().getEmail(),
+                        mp.getPhone(),
+                        mp.getServiceRadiusKm(),
+                        mp.getArea(),
+                        mp.getVerificationStatus().name(),
+                        mp.getIsAvailable(),
+                        mp.getTotalJobsCompleted(),
+                        mp.getMidJobCancels(),
+                        mp.getSuspensionReason(),
+                        mp.getSuspensionEndsAt() != null ? mp.getSuspensionEndsAt().toString() : null,
+                        mp.getAppealStatus() != null ? mp.getAppealStatus().name() : null,
+                        mp.getAppealReason(),
+                        mp.getRejectionReason()
+                )).collect(Collectors.toList());
+    }
+
+    public void adminApproveAppeal(Long mechanicProfileId) {
+        MechanicProfile mp = mechanicProfileRepository.findById(mechanicProfileId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mechanic not found"));
+        if (mp.getAppealStatus() != AppealStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "No pending appeal to approve");
+        }
+        mp.setVerificationStatus(VerificationStatus.VERIFIED);
+        mp.setSuspensionReason(null);
+        mp.setSuspensionEndsAt(null);
+        mp.setAppealStatus(AppealStatus.APPROVED);
+        mechanicProfileRepository.save(mp);
+    }
+
+    public void adminRejectAppeal(Long mechanicProfileId) {
+        MechanicProfile mp = mechanicProfileRepository.findById(mechanicProfileId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mechanic not found"));
+        if (mp.getAppealStatus() != AppealStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "No pending appeal to reject");
+        }
+        mp.setAppealStatus(AppealStatus.REJECTED);
+        mechanicProfileRepository.save(mp);
+    }
+
     public void adminDeleteMechanic(Long mechanicProfileId) {
         MechanicProfile mp = mechanicProfileRepository.findById(mechanicProfileId)
                 .orElseThrow(() -> new ResourceNotFoundException("Mechanic not found"));
@@ -525,6 +594,27 @@ public class AccountService {
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         accountRepository.delete(account);
+    }
+
+    public void updateHeartbeat(Long accountId) {
+        MechanicProfile profile = mechanicProfileRepository.findByAccountId(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Mechanic profile not found"));
+        profile.setLastHeartbeatAt(LocalDateTime.now());
+        mechanicProfileRepository.save(profile);
+    }
+
+    public String uploadProfilePhoto(Long accountId, MultipartFile file) {
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+        try {
+            String url = cloudinaryService.upload(file, "pitstop/profiles");
+            account.setProfilePhotoUrl(url);
+            accountRepository.save(account);
+            return url;
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
     }
 
     public void updateName(Long accountId, String name) {

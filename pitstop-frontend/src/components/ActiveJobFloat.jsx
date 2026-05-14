@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useActiveJob } from "../context/ActiveJobContext";
+import api from "../api/axios";
 
 const PEEK_H    = 72;   // always-visible summary strip
 const DETAILS_H = 280;  // expandable details panel (taller to fit confirmation cards)
@@ -76,6 +77,12 @@ export default function ActiveJobFloat() {
   const [photoLightbox, setPhotoLightbox] = useState(false);
   const [mechDist, setMechDist] = useState(null); // km to user, null = not yet checked
   const [countdown, setCountdown] = useState(3);
+  const [reportSheet, setReportSheet]     = useState(false);
+  const [reportReason, setReportReason]   = useState("");
+  const [reportDesc, setReportDesc]       = useState("");
+  const [reportBusy, setReportBusy]       = useState(false);
+  const [reportError, setReportError]     = useState(null);
+  const [reportDone, setReportDone]       = useState(false);
   const dragStartY = useRef(null);
   const prevJobIdRef = useRef(null);
   const navigate = useNavigate();
@@ -117,6 +124,15 @@ export default function ActiveJobFloat() {
     const id = setInterval(check, 15000);
     return () => clearInterval(id);
   }, [isMechanic, activeJob?.status, activeJob?.latitude, activeJob?.longitude]);
+
+  // Mechanic heartbeat — keeps lastHeartbeatAt fresh; scheduler abandons after 5 min silence
+  useEffect(() => {
+    if (!isMechanic || !activeJob) return;
+    const ping = () => api.post('/mechanic/heartbeat').catch(() => {});
+    ping();
+    const id = setInterval(ping, 30_000);
+    return () => clearInterval(id);
+  }, [isMechanic, activeJob?.id]);
 
   // Countdown + auto-redirect for job completion screen
   useEffect(() => {
@@ -425,14 +441,17 @@ export default function ActiveJobFloat() {
                 background: "var(--surface2)", border: "1px solid rgba(255,183,0,0.2)",
                 borderRadius: 14, padding: "12px 14px", marginBottom: 12,
               }}>
-                {/* Avatar */}
+                {/* Avatar — photo if available, else initials */}
                 <div style={{
                   width: 42, height: 42, borderRadius: "50%", flexShrink: 0,
                   background: "rgba(255,183,0,0.12)", border: "1.5px solid rgba(255,183,0,0.35)",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 16, fontWeight: 700, color: "var(--gold)",
+                  fontSize: 16, fontWeight: 700, color: "var(--gold)", overflow: "hidden",
                 }}>
-                  {activeJob.mechanicName.charAt(0).toUpperCase()}
+                  {activeJob.mechanicPhotoUrl
+                    ? <img src={activeJob.mechanicPhotoUrl} alt={activeJob.mechanicName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    : activeJob.mechanicName.charAt(0).toUpperCase()
+                  }
                 </div>
 
                 {/* Info */}
@@ -716,12 +735,122 @@ export default function ActiveJobFloat() {
                   Cancel
                 </button>
               )}
+
+              {/* USER: Report mechanic (IN_PROGRESS only) */}
+              {!isMechanic && isInProgress && (
+                reportDone ? (
+                  <span style={{ fontSize: 12, color: "var(--green)", alignSelf: "center" }}>✓ Reported</span>
+                ) : (
+                  <button
+                    onClick={() => { setReportError(null); setReportSheet(true); }}
+                    style={{
+                      flex: 0, minWidth: 72, height: 42, borderRadius: 10,
+                      background: "transparent", border: "1px solid rgba(230,57,70,0.35)",
+                      color: "var(--red)", fontSize: 12, cursor: "pointer",
+                    }}
+                  >
+                    Report
+                  </button>
+                )
+              )}
             </div>
 
           </div>
         </div>
       </div>
     </div>
+
+    {/* ── Report sheet overlay ───────────────────────────────────────────── */}
+    {reportSheet && (
+      <div
+        style={{
+          position: "fixed", inset: 0, zIndex: 300,
+          background: "rgba(0,0,0,0.55)",
+          display: "flex", alignItems: "flex-end",
+        }}
+        onClick={() => setReportSheet(false)}
+      >
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            width: "100%", maxWidth: 480, margin: "0 auto",
+            background: "var(--surface)", borderRadius: "18px 18px 0 0",
+            padding: "20px 20px 36px",
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Report mechanic</span>
+            <button onClick={() => setReportSheet(false)} style={{
+              background: "none", border: "none", color: "var(--text-3)", fontSize: 20, cursor: "pointer", lineHeight: 1,
+            }}>×</button>
+          </div>
+
+          {/* Reason pills */}
+          <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.8px" }}>
+            Select reason
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+            {["Unprofessional behavior", "Overcharged/scammed", "Refused to work", "Threatening behavior", "Other"].map(r => (
+              <button key={r} onClick={() => setReportReason(r)} style={{
+                height: 32, padding: "0 14px", borderRadius: 9999,
+                background: reportReason === r ? "rgba(230,57,70,0.12)" : "transparent",
+                border: `1px solid ${reportReason === r ? "rgba(230,57,70,0.6)" : "var(--border)"}`,
+                color: reportReason === r ? "var(--red)" : "var(--text-2)",
+                fontSize: 12, cursor: "pointer", fontWeight: reportReason === r ? 600 : 400,
+              }}>{r}</button>
+            ))}
+          </div>
+
+          {/* Optional description */}
+          <textarea
+            placeholder="Additional details (optional)…"
+            value={reportDesc}
+            onChange={e => setReportDesc(e.target.value)}
+            style={{
+              width: "100%", minHeight: 72, borderRadius: 10,
+              background: "var(--surface2)", border: "1px solid var(--border)",
+              color: "var(--text)", fontSize: 13, padding: "10px 12px",
+              resize: "none", fontFamily: "inherit", boxSizing: "border-box", marginBottom: 12,
+            }}
+          />
+
+          {reportError && (
+            <p style={{ fontSize: 12, color: "var(--red)", marginBottom: 10 }}>{reportError}</p>
+          )}
+
+          <button
+            disabled={!reportReason || reportBusy}
+            onClick={async () => {
+              if (!reportReason || reportBusy) return;
+              setReportBusy(true);
+              setReportError(null);
+              try {
+                await api.post(`/jobs/${activeJob.id}/report`, { reason: reportReason, description: reportDesc || null });
+                setReportSheet(false);
+                setReportDone(true);
+              } catch (err) {
+                const s = err.response?.status;
+                if (s === 409) setReportError("You've already reported this job.");
+                else if (s === 400) setReportError(err.response?.data?.message || "Cannot report at this stage.");
+                else setReportError("Failed to submit report. Try again.");
+              } finally {
+                setReportBusy(false);
+              }
+            }}
+            style={{
+              width: "100%", height: 44, borderRadius: 12,
+              background: "var(--red)", border: "none",
+              color: "var(--text)", fontSize: 13, fontWeight: 600,
+              cursor: !reportReason || reportBusy ? "not-allowed" : "pointer",
+              opacity: !reportReason || reportBusy ? 0.5 : 1,
+            }}
+          >
+            {reportBusy ? "Submitting…" : "Submit Report"}
+          </button>
+        </div>
+      </div>
+    )}
     </>
   );
 }

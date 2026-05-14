@@ -43,6 +43,9 @@ public interface JobRepository extends JpaRepository<Job, Long> {
     // Scheduler uses this to find PENDING jobs whose current ring timer has expired
     List<Job> findByStatusAndBroadcastStartedAtBefore(JobStatus status, LocalDateTime cutoff);
 
+    // Heartbeat scheduler uses this to find all jobs in active (non-PENDING) states
+    List<Job> findByStatusIn(List<JobStatus> statuses);
+
     // Reverse of findEligibleMechanicsInRing — finds PENDING jobs a newly-online mechanic
     // is eligible for and hasn't already received a broadcast for.
     @Query(value = """

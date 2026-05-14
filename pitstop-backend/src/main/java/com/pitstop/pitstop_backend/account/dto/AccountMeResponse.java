@@ -15,13 +15,16 @@ public class AccountMeResponse {
     private Double averageRating;  // null for USER, null until first review for MECHANIC
     private Integer reviewCount;   // null for USER
     private Integer totalJobsCompleted; // null for USER
+    private String profilePhotoUrl; // null for USER
+    private String appealStatus;    // null for USER, enum name for MECHANIC
 
     public AccountMeResponse(Long id, String name, String email, String role,
                              VerificationStatus verificationStatus,
                              Boolean isAvailable, String rejectionReason,
                              Boolean hasExpertise,
                              Double averageRating, Integer reviewCount,
-                             Integer totalJobsCompleted) {
+                             Integer totalJobsCompleted, String profilePhotoUrl,
+                             String appealStatus) {
         this.id = id;
         this.name = name;
         this.email = email;
@@ -33,6 +36,8 @@ public class AccountMeResponse {
         this.averageRating = averageRating;
         this.reviewCount = reviewCount;
         this.totalJobsCompleted = totalJobsCompleted;
+        this.profilePhotoUrl = profilePhotoUrl;
+        this.appealStatus = appealStatus;
     }
 
     public Long getId() { return id; }
@@ -46,4 +51,6 @@ public class AccountMeResponse {
     public Double getAverageRating() { return averageRating; }
     public Integer getReviewCount() { return reviewCount; }
     public Integer getTotalJobsCompleted() { return totalJobsCompleted; }
+    public String getProfilePhotoUrl() { return profilePhotoUrl; }
+    public String getAppealStatus() { return appealStatus; }
 }

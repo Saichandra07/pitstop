@@ -815,6 +815,138 @@ function ReasonsTab({ reasons, onAdd, onDelete }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
+/*  REPORTS TAB                                                                */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+function ReportsTab({ onAction }) {
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    api.get("/admin/reports")
+      .then(r => setReports(r.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const resolve = async (id) => {
+    await api.post(`/admin/reports/${id}/resolve`).catch(() => {});
+    load();
+    onAction?.();
+  };
+
+  if (loading) return <Loader />;
+  if (!reports.length) return <Empty icon="📋" text="No pending reports" />;
+
+  return (
+    <>
+      <SectionHead>Pending Reports</SectionHead>
+      {reports.map(r => (
+        <ItemCard key={r.id} status="SUSPENDED">
+          <div style={{ padding: "12px 14px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 13, color: "var(--text)" }}>{r.reporterName}</div>
+                <div style={{ fontSize: 11, color: "var(--text-3)" }}>reported <span style={{ color: "var(--text-2)" }}>{r.mechanicName}</span></div>
+              </div>
+              <div style={{ fontSize: 10, color: "var(--text-3)" }}>Job #{r.jobId}</div>
+            </div>
+            <div style={{
+              background: "var(--surface2)", borderRadius: 8, padding: "7px 10px",
+              fontSize: 12, color: "var(--text-2)", marginBottom: r.description ? 6 : 12,
+              borderLeft: "3px solid var(--red)",
+            }}>
+              {r.reason}
+            </div>
+            {r.description && (
+              <div style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 12, paddingLeft: 4 }}>
+                {r.description}
+              </div>
+            )}
+            <div style={{ fontSize: 10, color: "var(--text-3)", marginBottom: 10 }}>
+              {new Date(r.createdAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+            </div>
+            <BtnRow>
+              <ABtn label="Resolve" color="green" onClick={() => resolve(r.id)} />
+            </BtnRow>
+          </div>
+        </ItemCard>
+      ))}
+    </>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  APPEALS TAB                                                                */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+function AppealsTab({ onAction }) {
+  const [appeals, setAppeals]   = useState([]);
+  const [loading, setLoading]   = useState(true);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    api.get("/admin/appeals")
+      .then(r => setAppeals(r.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const approve = async (id) => {
+    await api.post(`/admin/appeals/${id}/approve`).catch(() => {});
+    load();
+    onAction?.();
+  };
+
+  const reject = async (id) => {
+    await api.post(`/admin/appeals/${id}/reject`).catch(() => {});
+    load();
+    onAction?.();
+  };
+
+  if (loading) return <Loader />;
+  if (!appeals.length) return <Empty icon="📋" text="No pending appeals" />;
+
+  return (
+    <>
+      <SectionHead>Pending Appeals</SectionHead>
+      {appeals.map(m => (
+        <ItemCard key={m.mechanicProfileId} status="SUSPENDED">
+          <div style={{ padding: "12px 14px" }}>
+            <div style={{ fontWeight: 600, fontSize: 14, color: "var(--text)", marginBottom: 2 }}>{m.name}</div>
+            <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8 }}>{m.email}</div>
+            {m.suspensionReason && (
+              <div style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 8 }}>
+                <span style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.8px" }}>Suspended for: </span>
+                {m.suspensionReason}
+              </div>
+            )}
+            {m.appealReason && (
+              <div style={{
+                background: "var(--surface2)", borderRadius: 8, padding: "8px 10px",
+                fontSize: 12, color: "var(--text-2)", marginBottom: 12,
+                borderLeft: "3px solid var(--gold)",
+              }}>
+                {m.appealReason}
+              </div>
+            )}
+            <BtnRow>
+              <ABtn label="Approve" color="green" onClick={() => approve(m.mechanicProfileId)} />
+              <ABtn label="Reject"  color="red"   onClick={() => reject(m.mechanicProfileId)} />
+            </BtnRow>
+          </div>
+        </ItemCard>
+      ))}
+    </>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
 /*  MAIN PAGE                                                                  */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -822,10 +954,11 @@ export default function AdminDashboardPage() {
   const { logout } = useAuth();
   const navigate   = useNavigate();
 
-  const [tab, setTab]       = useState("overview");
-  const [reasons, setReasons] = useState([]);
-  const [pending, setPending] = useState(0);
-  const [stats, setStats]   = useState({
+  const [tab, setTab]             = useState("overview");
+  const [reasons, setReasons]     = useState([]);
+  const [pending, setPending]     = useState(0);
+  const [pendingAppeals, setPendingAppeals] = useState(0);
+  const [stats, setStats]         = useState({
     activeJobs: null, onlineMechanics: null, pendingVerify: null, pendingReports: 0, recentActivity: [],
   });
 
@@ -840,14 +973,18 @@ export default function AdminDashboardPage() {
       api.get("/admin/jobs?status=IN_PROGRESS").catch(() => ({ data: [] })),
       api.get("/admin/mechanics?status=VERIFIED").catch(() => ({ data: [] })),
       api.get("/admin/mechanics/pending").catch(() => ({ data: [] })),
-    ]).then(([jobs, mechs, pend]) => {
+      api.get("/admin/appeals").catch(() => ({ data: [] })),
+      api.get("/admin/reports").catch(() => ({ data: [] })),
+    ]).then(([jobs, mechs, pend, appeals, reports]) => {
       const pv = pend.data.length;
       setPending(pv);
+      setPendingAppeals(appeals.data.length);
       setStats(s => ({
         ...s,
         activeJobs:      jobs.data.length,
         onlineMechanics: mechs.data.filter(m => m.isAvailable).length,
         pendingVerify:   pv,
+        pendingReports:  reports.data.length,
       }));
     });
   }, []);
@@ -863,6 +1000,8 @@ export default function AdminDashboardPage() {
     { id: "mechanics", label: "Mechanics" },
     { id: "jobs",      label: "Jobs"      },
     { id: "users",     label: "Users"     },
+    { id: "reports",   label: "Reports",  badge: stats.pendingReports },
+    { id: "appeals",   label: "Appeals",  badge: pendingAppeals },
     { id: "reasons",   label: "Reasons"   },
   ];
 
@@ -925,6 +1064,8 @@ export default function AdminDashboardPage() {
           {tab === "mechanics" && <MechanicsTab />}
           {tab === "jobs"      && <JobsTab />}
           {tab === "users"     && <UsersTab />}
+          {tab === "reports"   && <ReportsTab onAction={loadStats} />}
+          {tab === "appeals"   && <AppealsTab onAction={loadStats} />}
           {tab === "reasons"   && <ReasonsTab reasons={reasons} onAdd={addReason} onDelete={delReason} />}
         </div>
       </div>
