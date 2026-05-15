@@ -32,12 +32,14 @@ public class AccountController {
     private final AccountService accountService;
     private final JwtUtil jwtUtil;
     private final AccountRepository accountRepository;
+    private final MechanicProfileRepository mechanicProfileRepository;
     private final JobService jobService;
 
-    public AccountController(AccountService accountService, JwtUtil jwtUtil, AccountRepository accountRepository, JobService jobService){
+    public AccountController(AccountService accountService, JwtUtil jwtUtil, AccountRepository accountRepository, MechanicProfileRepository mechanicProfileRepository, JobService jobService){
         this.accountService = accountService;
         this.jwtUtil = jwtUtil;
         this.accountRepository = accountRepository;
+        this.mechanicProfileRepository = mechanicProfileRepository;
         this.jobService = jobService;
     }
 
@@ -100,6 +102,16 @@ public class AccountController {
     public ResponseEntity<Void> deleteRejectionReason(@PathVariable Long id) {
         accountService.deleteRejectionReason(id);
         return ResponseEntity.noContent().build();
+    }
+
+    // GET /api/accounts/nearby-mechanics-count?lat=X&lng=Y — USER only (SecurityConfig)
+    // Returns the count of online, verified mechanics within 20 km of the user's location.
+    @GetMapping("/accounts/nearby-mechanics-count")
+    public ResponseEntity<Map<String, Integer>> getNearbyMechanicsCount(
+            @RequestParam double lat,
+            @RequestParam double lng) {
+        Integer count = mechanicProfileRepository.countNearbyAvailable(lat, lng, 20.0);
+        return ResponseEntity.ok(Map.of("count", count != null ? count : 0));
     }
 
     @GetMapping("/accounts/me")

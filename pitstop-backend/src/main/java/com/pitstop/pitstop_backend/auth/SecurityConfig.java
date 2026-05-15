@@ -86,6 +86,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/accounts/appeal").hasRole("MECHANIC")
 
                         // ── USER only ───────────────────────────────────────────────
+                        // Nearby mechanics count for dashboard map tile
+                        .requestMatchers(HttpMethod.GET, "/api/accounts/nearby-mechanics-count").hasRole("USER")
                         // Update phone number
                         .requestMatchers(HttpMethod.PATCH, "/api/accounts/phone").hasRole("USER")
                         // Submit SOS

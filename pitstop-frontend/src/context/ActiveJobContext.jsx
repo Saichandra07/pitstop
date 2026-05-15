@@ -176,7 +176,15 @@ export function ActiveJobProvider({ children }) {
 
   const handleCancel = useCallback(async (jobId, status) => {
     if (status === "ACCEPTED") {
-      const ok = window.confirm("A mechanic is already on the way. Cancel anyway?");
+      const ok = window.confirm(
+        "Your mechanic is on the way — cancelling now will send them back.\n\nRepeated cancels after acceptance may temporarily limit your SOS access."
+      );
+      if (!ok) return;
+    }
+    if (status === "ARRIVAL_REQUESTED") {
+      const ok = window.confirm(
+        "Your mechanic says they've arrived. Are you sure you want to cancel?\n\nRepeated cancels after acceptance may temporarily limit your SOS access."
+      );
       if (!ok) return;
     }
     try {

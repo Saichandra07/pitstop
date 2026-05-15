@@ -26,6 +26,25 @@ public interface MechanicProfileRepository extends JpaRepository<MechanicProfile
     // Haversine distance filter — runs entirely in PostgreSQL, no Java-side filtering.
     // Returns verified, online mechanics within the ring band [minKm, maxKm] from the job location,
     // who handle the required vehicleType, and haven't already been sent this job.
+    // Count of online, verified mechanics within radiusKm of a given point.
+    // Used for the user dashboard "nearby" counter.
+    @Query(value = """
+            SELECT COUNT(DISTINCT mp.id) FROM mechanic_profile mp
+            WHERE mp.is_available = true
+            AND mp.verification_status = 'VERIFIED'
+            AND mp.latitude IS NOT NULL AND mp.longitude IS NOT NULL
+            AND (6371 * acos(LEAST(1.0,
+                cos(radians(:lat)) * cos(radians(mp.latitude))
+                * cos(radians(mp.longitude) - radians(:lng))
+                + sin(radians(:lat)) * sin(radians(mp.latitude))
+            ))) <= :radiusKm
+            """, nativeQuery = true)
+    Integer countNearbyAvailable(
+            @Param("lat") double lat,
+            @Param("lng") double lng,
+            @Param("radiusKm") double radiusKm
+    );
+
     @Query(value = """
             SELECT DISTINCT mp.* FROM mechanic_profile mp
             WHERE mp.is_available = true

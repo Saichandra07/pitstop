@@ -329,8 +329,8 @@ public class JobService {
         job.setStatus(JobStatus.CANCELLED);
         jobRepository.save(job);
 
-        // Post-acceptance cancels: 1st = no penalty, 2nd = warning, 3rd in 30 days = 24hr timeout.
-        // Each subsequent cancel within the same 30-day window doubles the timeout duration.
+        // Post-acceptance cancels: 1st + 2nd = no penalty (frontend warns on both),
+        // 3rd in 30 days = 30-min cooldown, 4th+ = 1hr flat (no doubling).
         if (wasAccepted) {
             Account acc = accountRepository.findById(accountId).orElse(null);
             if (acc != null) {
@@ -341,10 +341,11 @@ public class JobService {
                     acc.setSosCancelCountResetAt(now.plusDays(30));
                 }
                 acc.setSosCancelCount(acc.getSosCancelCount() + 1);
-                if (acc.getSosCancelCount() >= 3) {
-                    // 3rd = 24hr, 4th = 48hr, 5th = 96hr ...
-                    long hours = (long) (24 * Math.pow(2, acc.getSosCancelCount() - 3));
-                    acc.setSosTimeoutUntil(now.plusHours(hours));
+                int count = acc.getSosCancelCount();
+                if (count == 3) {
+                    acc.setSosTimeoutUntil(now.plusMinutes(30));
+                } else if (count > 3) {
+                    acc.setSosTimeoutUntil(now.plusHours(1));
                 }
                 accountRepository.save(acc);
             }

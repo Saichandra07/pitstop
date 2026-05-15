@@ -120,7 +120,7 @@ function LastJobStrip({ job, onClick }) {
 }
 
 // ─── Heartbeat Map ────────────────────────────────────────────────────────────
-function HeartbeatMap({ bottomOffset }) {
+function HeartbeatMap({ bottomOffset, nearbyCount }) {
   const mechDots = [
     { top: "20%", left: "13%" }, { top: "16%", left: "70%" },
     { top: "58%", left: "80%" }, { top: "65%", left: "10%" },
@@ -155,7 +155,7 @@ function HeartbeatMap({ bottomOffset }) {
         <div key={i} style={{ position:"absolute", ...pos, width:8, height:8, borderRadius:"50%", background:"var(--green)", opacity:0.8, boxShadow:"0 0 10px rgba(74,222,128,0.7)" }} />
       ))}
       <div style={{ position:"absolute", top:78, right:16, background:"rgba(18,20,31,0.96)", border:"1px solid rgba(74,222,128,0.25)", borderRadius:12, padding:"8px 12px", textAlign:"center" }}>
-        <div style={{ fontSize:18, fontWeight:800, color:"var(--green)", lineHeight:1 }}>6</div>
+        <div style={{ fontSize:18, fontWeight:800, color:"var(--green)", lineHeight:1 }}>{nearbyCount ?? "–"}</div>
         <div style={{ fontSize:9, color:"var(--text-3)", letterSpacing:"1px", textTransform:"uppercase", marginTop:3 }}>nearby</div>
       </div>
       <div style={{ position:"absolute", left:16, bottom:bottomOffset+14, display:"flex", alignItems:"center", gap:5, transition:"bottom 0.35s cubic-bezier(0.32,0.72,0,1)" }}>
@@ -201,6 +201,34 @@ export default function DashboardPage() {
   const [dragStartY, setDragStartY]           = useState(null);
   const [dragStartH, setDragStartH]           = useState(null);
   const [liveSheetH, setLiveSheetH]           = useState(null);
+  const [nearbyCount, setNearbyCount]         = useState(null);
+
+  const fetchNearbyCount = useCallback(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        try {
+          const res = await api.get("/accounts/nearby-mechanics-count", {
+            params: { lat: coords.latitude, lng: coords.longitude },
+          });
+          setNearbyCount(res.data.count);
+        } catch { /* non-critical — counter stays as "–" */ }
+      },
+      () => { /* GPS denied or unavailable — leave counter as "–" */ },
+      { enableHighAccuracy: false, timeout: 8000 }
+    );
+  }, []);
+
+  useEffect(() => {
+    fetchNearbyCount();
+    const interval = setInterval(fetchNearbyCount, 60_000);
+    const onVisibility = () => { if (document.visibilityState === "visible") fetchNearbyCount(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [fetchNearbyCount]);
 
   const fetchHistory = useCallback(async () => {
     try {
@@ -258,7 +286,7 @@ export default function DashboardPage() {
       {/* Map — HeartbeatMap when idle or PENDING (still searching), ActiveMap only when mechanic is assigned */}
       {(hasActiveJob && (activeJob.status === "ACCEPTED" || activeJob.status === "IN_PROGRESS"))
         ? <ActiveMap />
-        : <HeartbeatMap bottomOffset={mapBottomOffset} />}
+        : <HeartbeatMap bottomOffset={mapBottomOffset} nearbyCount={nearbyCount} />}
 
       {/* ── TopBar — absolute over map ── */}
       <div style={{
