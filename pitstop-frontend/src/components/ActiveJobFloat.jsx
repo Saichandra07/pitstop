@@ -1,11 +1,13 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useActiveJob } from "../context/ActiveJobContext";
+import ChatOverlay from "./ChatOverlay";
+import { useChatMessages } from "../hooks/useChatMessages";
 import api from "../api/axios";
 
 const PEEK_H    = 72;   // always-visible summary strip
-const DETAILS_H = 280;  // expandable details panel (taller to fit confirmation cards)
+const DETAILS_H = 420;  // expandable details panel
 
 const VEHICLE_EMOJIS = {
   TWO_WHEELER: "🏍️", THREE_WHEELER: "🛺", FOUR_WHEELER: "🚗", SIX_PLUS_WHEELER: "🚛",
@@ -83,6 +85,15 @@ export default function ActiveJobFloat() {
   const [reportBusy, setReportBusy]       = useState(false);
   const [reportError, setReportError]     = useState(null);
   const [reportDone, setReportDone]       = useState(false);
+  const [chatOpen, setChatOpen]           = useState(false);
+  const [advisoryDismissed, setAdvisoryDismissed] = useState(() => !!localStorage.getItem('pitstop_reach_advisory_dismissed'));
+  const [reachConfirm, setReachConfirm]   = useState(false);
+  const [reachBusy, setReachBusy]         = useState(false);
+  const [reachError, setReachError]       = useState(null);
+  const [escapeConfirm, setEscapeConfirm] = useState(false);
+  const [escapeBusy, setEscapeBusy]       = useState(false);
+  const [alertCountdown, setAlertCountdown] = useState(null); // seconds remaining
+  const [mechRespondedToast, setMechRespondedToast] = useState(false);
   const dragStartY = useRef(null);
   const prevJobIdRef = useRef(null);
   const navigate = useNavigate();
@@ -90,6 +101,16 @@ export default function ActiveJobFloat() {
   const isMechanic = user?.role === "MECHANIC";
   const { pathname } = useLocation();
   const isOnDashboard = pathname === "/mechanic/dashboard";
+
+  // Called before early returns so hook order is stable across renders
+  const { messages } = useChatMessages(activeJob?.id ?? null);
+
+  // True when mechanic sent any chat message after the reach alert was fired
+  const mechHasRespondedAfterAlert = useMemo(() => {
+    if (!activeJob?.reachAlertSentAt) return false;
+    const alertTime = new Date(activeJob.reachAlertSentAt);
+    return messages.some(m => m.senderRole === "MECHANIC" && new Date(m.sentAt) > alertTime);
+  }, [messages, activeJob?.reachAlertSentAt]);
 
   // Auto-expand whenever a brand-new job appears
   useEffect(() => {
@@ -152,6 +173,25 @@ export default function ActiveJobFloat() {
     return () => clearInterval(tick);
   }, [jobCompletedSuccessfully, isMechanic, navigate, setJobCompletedSuccessfully]);
 
+  // Countdown timer: counts down from reachAlertSentAt + 5 min
+  useEffect(() => {
+    if (!activeJob?.reachAlertSentAt || isMechanic) { setAlertCountdown(null); return; }
+    const unlockAt = new Date(activeJob.reachAlertSentAt).getTime() + 5 * 60 * 1000;
+    const tick = () => setAlertCountdown(Math.max(0, Math.floor((unlockAt - Date.now()) / 1000)));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [activeJob?.reachAlertSentAt, isMechanic]);
+
+  // Toast when mechanic responds in chat during the countdown
+  useEffect(() => {
+    if (mechHasRespondedAfterAlert && activeJob?.reachAlertSentAt && !isMechanic) {
+      setMechRespondedToast(true);
+      const id = setTimeout(() => setMechRespondedToast(false), 4000);
+      return () => clearTimeout(id);
+    }
+  }, [mechHasRespondedAfterAlert, activeJob?.reachAlertSentAt, isMechanic]);
+
   // Full-screen job completion overlay — shown to mechanic after user confirms done
   if (jobCompletedSuccessfully && isMechanic) {
     return (
@@ -206,7 +246,24 @@ export default function ActiveJobFloat() {
     );
   }
 
-  if (!activeJob || !user || user.role === "ADMIN") return null;
+  if (!activeJob || !user || user.role === "ADMIN") {
+    if (snackbar && user && user.role !== "ADMIN") {
+      return (
+        <div style={{ position: "fixed", bottom: 68, left: 16, right: 16, zIndex: 50 }}>
+          <div style={{
+            background: "var(--surface)", border: "1px solid var(--border)",
+            borderRadius: 10, padding: "10px 14px",
+            fontSize: 13, fontWeight: 500,
+            color: SNACK_COLOR[snackbar.type] || "var(--text-3)",
+            boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+          }}>
+            {snackbar.message}
+          </div>
+        </div>
+      );
+    }
+    return null;
+  }
 
   const emoji        = VEHICLE_EMOJIS[activeJob.vehicleType] || "🚗";
   const problemStr   = isMechanic
@@ -403,7 +460,7 @@ export default function ActiveJobFloat() {
           overflow: "hidden",
           transition: "max-height 0.38s cubic-bezier(0.25, 0.8, 0.25, 1)",
         }}>
-          <div style={{ padding: "12px 16px 16px" }}>
+          <div style={{ padding: "12px 16px 16px", overflowY: "auto", maxHeight: DETAILS_H }}>
 
             {/* User: mechanic-abandoned banner */}
             {!isMechanic && rebroadcastBanner && (
@@ -416,6 +473,59 @@ export default function ActiveJobFloat() {
                 <span style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.4 }}>
                   Previous mechanic couldn't continue. Finding a new one…
                 </span>
+              </div>
+            )}
+
+            {/* ── MECHANIC: Stage 0 advisory — dismissable reach-out nudge ── */}
+            {isMechanic && isAccepted && !advisoryDismissed && (
+              <div style={{
+                display: "flex", alignItems: "flex-start", gap: 10,
+                background: "rgba(255,183,0,0.08)", border: "1px solid rgba(255,183,0,0.25)",
+                borderRadius: 12, padding: "10px 12px", marginBottom: 12,
+              }}>
+                <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>💬</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gold)", marginBottom: 2 }}>
+                    Let {activeJob.userName || "the user"} know you're on the way
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.5 }}>
+                    Call or send a quick message — it makes a big difference.
+                  </div>
+                </div>
+                <button
+                  onTouchStart={e => e.stopPropagation()}
+                  onClick={() => { localStorage.setItem('pitstop_reach_advisory_dismissed', 'true'); setAdvisoryDismissed(true); }}
+                  style={{ background: "none", border: "none", color: "var(--text-3)", fontSize: 16, cursor: "pointer", padding: "0 2px", flexShrink: 0, lineHeight: 1 }}
+                >×</button>
+              </div>
+            )}
+
+            {/* ── MECHANIC: Stage 1 alert — user filed reach-alert, undismissable ── */}
+            {isMechanic && isAccepted && activeJob.reachAlertSentAt && !mechHasRespondedAfterAlert && (
+              <div style={{
+                background: "rgba(230,57,70,0.08)", border: "1.5px solid rgba(230,57,70,0.4)",
+                borderRadius: 12, padding: "12px 14px", marginBottom: 12,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 15 }}>⚠️</span>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--red)" }}>
+                    {activeJob.userName || "The user"} is trying to reach you
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.5, marginBottom: 10 }}>
+                  Your phone may be unreachable. Reply in chat now to let them know you're on the way — or they may cancel without penalty.
+                </div>
+                <button
+                  onTouchStart={e => e.stopPropagation()}
+                  onClick={() => setChatOpen(true)}
+                  style={{
+                    width: "100%", height: 38, borderRadius: 10,
+                    background: "var(--red)", border: "none",
+                    color: "var(--text)", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  Open Chat
+                </button>
               </div>
             )}
 
@@ -537,6 +647,76 @@ export default function ActiveJobFloat() {
                 </div>
               </div>
             )}
+
+            {/* ── USER: "Can't reach mechanic?" reach-alert flow (ACCEPTED only) ── */}
+            {!isMechanic && isAccepted && (() => {
+              // Stage 2: mechanic responded after alert → nothing to show
+              if (mechHasRespondedAfterAlert) return null;
+
+              // Stage 1: alert sent, counting down
+              if (activeJob.reachAlertSentAt) {
+                const escaped = alertCountdown === 0;
+                const mins = Math.floor((alertCountdown ?? 300) / 60);
+                const secs = (alertCountdown ?? 300) % 60;
+                return (
+                  <div style={{
+                    background: escaped ? "rgba(230,57,70,0.07)" : "rgba(255,183,0,0.06)",
+                    border: `1px solid ${escaped ? "rgba(230,57,70,0.3)" : "rgba(255,183,0,0.2)"}`,
+                    borderRadius: 12, padding: "12px 14px", marginBottom: 12,
+                  }}>
+                    {!escaped ? (
+                      <>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gold)", marginBottom: 4 }}>
+                          ⏳ Mechanic notified
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.5, marginBottom: 6 }}>
+                          Waiting for them to respond in chat…
+                        </div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: "var(--gold)", fontVariantNumeric: "tabular-nums" }}>
+                          {mins}:{String(secs).padStart(2, "0")}
+                        </div>
+                        <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 2 }}>remaining</div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--red)", marginBottom: 4 }}>
+                          Mechanic hasn't responded
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--text-2)", lineHeight: 1.5, marginBottom: 10 }}>
+                          You can cancel now and find another mechanic — no penalty applied to your account.
+                        </div>
+                        <button
+                          onTouchStart={e => e.stopPropagation()}
+                          onClick={() => { setEscapeConfirm(true); reachError && setReachError(null); }}
+                          style={{
+                            width: "100%", height: 40, borderRadius: 10, border: "none",
+                            background: "var(--red)", color: "var(--text)",
+                            fontSize: 13, fontWeight: 700, cursor: "pointer",
+                          }}
+                        >
+                          Cancel &amp; find another mechanic
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+              }
+
+              // Stage 0: no alert yet — show "Can't reach?" link
+              return (
+                <button
+                  onTouchStart={e => e.stopPropagation()}
+                  onClick={() => { setReachConfirm(true); setReachError(null); }}
+                  style={{
+                    background: "none", border: "none", padding: 0,
+                    color: "var(--text-3)", fontSize: 11, cursor: "pointer",
+                    textDecoration: "underline", marginBottom: 10, display: "block",
+                  }}
+                >
+                  Can't reach mechanic?
+                </button>
+              );
+            })()}
 
             {/* ── USER: ARRIVAL_REQUESTED confirmation card ── */}
             {!isMechanic && isArrivalRequested && (
@@ -721,6 +901,21 @@ export default function ActiveJobFloat() {
                 </a>
               )}
 
+              {/* MECHANIC: Chat (any active state) */}
+              {isMechanic && (isAccepted || isArrivalRequested || isInProgress || isCompletionRequested) && (
+                <button
+                  onTouchStart={e => e.stopPropagation()}
+                  onClick={() => setChatOpen(true)}
+                  style={{
+                    flex: 0, minWidth: 60, height: 42, borderRadius: 10,
+                    background: "rgba(255,183,0,0.1)", border: "1px solid rgba(255,183,0,0.25)",
+                    color: "var(--gold)", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  Chat
+                </button>
+              )}
+
               {/* USER: Call mechanic (ACCEPTED / ARRIVAL_REQUESTED / IN_PROGRESS) */}
               {!isMechanic && (isAccepted || isArrivalRequested || isInProgress) && (
                 <a
@@ -736,6 +931,21 @@ export default function ActiveJobFloat() {
                 >
                   <PhoneIcon /> Call mechanic
                 </a>
+              )}
+
+              {/* USER: Chat (any post-PENDING state) */}
+              {!isMechanic && (isAccepted || isArrivalRequested || isInProgress || isCompletionRequested) && (
+                <button
+                  onTouchStart={e => e.stopPropagation()}
+                  onClick={() => setChatOpen(true)}
+                  style={{
+                    flex: 0, minWidth: 60, height: 42, borderRadius: 10,
+                    background: "rgba(255,183,0,0.1)", border: "1px solid rgba(255,183,0,0.25)",
+                    color: "var(--gold)", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  Chat
+                </button>
               )}
 
               {/* USER: Cancel (PENDING / ACCEPTED / ARRIVAL_REQUESTED — blocked from COMPLETION_REQUESTED onward) */}
@@ -777,6 +987,105 @@ export default function ActiveJobFloat() {
       </div>
     </div>
 
+    {/* ── Mechanic responded toast ──────────────────────────────────────── */}
+    {mechRespondedToast && (
+      <div style={{
+        position: "fixed", bottom: 68 + 12, left: 16, right: 16, zIndex: 310,
+        background: "var(--surface2)", border: "1px solid rgba(74,222,128,0.4)",
+        borderRadius: 12, padding: "12px 16px",
+        display: "flex", alignItems: "center", gap: 10,
+        boxShadow: "0 4px 24px rgba(0,0,0,0.4)", pointerEvents: "none",
+      }}>
+        <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--green)", flexShrink: 0 }} />
+        <span style={{ fontSize: 13, color: "var(--text)" }}>Mechanic responded — check your chat</span>
+      </div>
+    )}
+
+    {/* ── Reach-alert confirmation dialog ───────────────────────────────── */}
+    {reachConfirm && (
+      <div
+        onClick={() => setReachConfirm(false)}
+        style={{ position: "fixed", inset: 0, zIndex: 305, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end" }}
+      >
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{ width: "100%", background: "var(--surface)", borderRadius: "18px 18px 0 0", padding: "20px 20px 36px" }}
+        >
+          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>Notify mechanic?</div>
+          <div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.6, marginBottom: 20 }}>
+            We'll send your mechanic a real-time alert that you're trying to reach them. If they don't respond within 5 minutes, you can cancel without any penalty.
+          </div>
+          {reachError && <p style={{ fontSize: 12, color: "var(--red)", marginBottom: 10 }}>{reachError}</p>}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => setReachConfirm(false)} className="ps-btn-ghost" style={{ flex: 1, height: 46, fontSize: 13 }}>Cancel</button>
+            <button
+              disabled={reachBusy}
+              onClick={async () => {
+                setReachBusy(true); setReachError(null);
+                try {
+                  await api.post(`/jobs/${activeJob.id}/reach-alert`);
+                  setReachConfirm(false);
+                } catch (err) {
+                  setReachError(err.response?.data?.message || "Failed. Try again.");
+                } finally { setReachBusy(false); }
+              }}
+              className="ps-btn"
+              style={{ flex: 2, height: 46, fontSize: 13, opacity: reachBusy ? 0.5 : 1 }}
+            >{reachBusy ? "Sending…" : "Notify mechanic"}</button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── Escape hatch confirmation dialog ──────────────────────────────── */}
+    {escapeConfirm && (
+      <div
+        onClick={() => setEscapeConfirm(false)}
+        style={{ position: "fixed", inset: 0, zIndex: 305, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end" }}
+      >
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{ width: "100%", background: "var(--surface)", borderRadius: "18px 18px 0 0", padding: "20px 20px 36px" }}
+        >
+          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>Cancel without penalty?</div>
+          <div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.6, marginBottom: 20 }}>
+            Your job will be re-broadcast to find a new mechanic. No cancel penalty will be added to your account since the mechanic didn't respond.
+          </div>
+          {reachError && <p style={{ fontSize: 12, color: "var(--red)", marginBottom: 10 }}>{reachError}</p>}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => setEscapeConfirm(false)} className="ps-btn-ghost" style={{ flex: 1, height: 46, fontSize: 13 }}>Keep waiting</button>
+            <button
+              disabled={escapeBusy}
+              onClick={async () => {
+                setEscapeBusy(true); setReachError(null);
+                try {
+                  await api.post(`/jobs/${activeJob.id}/mechanic-unreachable`);
+                  setEscapeConfirm(false);
+                } catch (err) {
+                  setReachError(err.response?.data?.message || "Failed. Try again.");
+                } finally { setEscapeBusy(false); }
+              }}
+              style={{
+                flex: 2, height: 46, borderRadius: 10, border: "none",
+                background: "var(--red)", color: "var(--text)",
+                fontSize: 13, fontWeight: 700, cursor: escapeBusy ? "not-allowed" : "pointer",
+                opacity: escapeBusy ? 0.5 : 1,
+              }}
+            >{escapeBusy ? "Processing…" : "Yes, find a new mechanic"}</button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── Chat overlay ──────────────────────────────────────────────────── */}
+    {chatOpen && activeJob && (
+      <ChatOverlay
+        jobId={activeJob.id}
+        role={isMechanic ? "MECHANIC" : "USER"}
+        onClose={() => setChatOpen(false)}
+      />
+    )}
+
     {/* ── Report sheet overlay ───────────────────────────────────────────── */}
     {reportSheet && (
       <div
@@ -808,7 +1117,7 @@ export default function ActiveJobFloat() {
             Select reason
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
-            {["Unprofessional behavior", "Overcharged/scammed", "Refused to work", "Threatening behavior", "Other"].map(r => (
+            {["Unprofessional behavior", "Overcharged/scammed", "Refused to work", "Threatening behavior", "Wrong/non-working phone number", "Mechanic unreachable (phone + chat)", "Other"].map(r => (
               <button key={r} onClick={() => setReportReason(r)} style={{
                 height: 32, padding: "0 14px", borderRadius: 9999,
                 background: reportReason === r ? "rgba(230,57,70,0.12)" : "transparent",

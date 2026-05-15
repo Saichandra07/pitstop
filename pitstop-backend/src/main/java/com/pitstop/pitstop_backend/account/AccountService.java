@@ -79,7 +79,7 @@ public class AccountService {
     }
 
 
-    public LoginResponse register(RegisterRequest request, String clientIp) {
+    public void register(RegisterRequest request, String clientIp) {
         rateLimiterService.checkAndRecord(clientIp + ":register", 3, 60);
 
         if (accountRepository.existsByEmail(request.email())) {
@@ -90,9 +90,6 @@ public class AccountService {
             if (request.phone() == null || request.phone().isBlank()) {
                 throw new RuntimeException("Phone number is required for mechanic registration");
             }
-            if (request.serviceRadiusKm() == null) {
-                throw new RuntimeException("Service radius is required for mechanic");
-            }
         }
 
         Account account = new Account();
@@ -100,7 +97,7 @@ public class AccountService {
         account.setName(request.name());
         account.setPasswordHash(passwordEncoder.encode(request.password()));
         account.setRole(request.role());
-        if (request.role() == Role.USER && request.phone() != null && !request.phone().isBlank()) {
+        if (request.phone() != null && !request.phone().isBlank()) {
             account.setPhone(request.phone().trim());
         }
 
@@ -111,16 +108,11 @@ public class AccountService {
             MechanicProfile profile = new MechanicProfile();
             profile.setAccount(saved);
             profile.setPhone(request.phone());
-            profile.setServiceRadiusKm(request.serviceRadiusKm());
+            profile.setServiceRadiusKm(10.0);
             profile.setVerificationStatus(VerificationStatus.PENDING);
             mechanicProfileRepository.save(profile);
             // expertise saved separately via PATCH /accounts/expertise in onboarding step 3
         }
-
-        String token = jwtUtil.generateToken(saved.getEmail(), saved.getId(), saved.getRole());
-        VerificationStatus verificationStatus = request.role() == Role.MECHANIC
-                ? VerificationStatus.PENDING : null;
-        return new LoginResponse(token, saved.getId(), saved.getName(), saved.getEmail(), saved.getRole(), verificationStatus);
     }
 
     // Reusable — called from register() and setExpertise()
@@ -527,7 +519,7 @@ public class AccountService {
         mechanicProfileRepository.save(mp);
     }
 
-    public void submitAppeal(Long accountId, String reason) {
+    public void submitAppeal(Long accountId, String reason, String updatedPhone) {
         MechanicProfile mp = mechanicProfileRepository.findByAccountId(accountId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Mechanic profile not found"));
         if (mp.getVerificationStatus() != VerificationStatus.SUSPENDED) {
@@ -539,6 +531,11 @@ public class AccountService {
         mp.setAppealReason(reason);
         mp.setAppealStatus(AppealStatus.PENDING);
         mechanicProfileRepository.save(mp);
+        if (updatedPhone != null && !updatedPhone.isBlank()) {
+            Account account = mp.getAccount();
+            account.setPhone(updatedPhone.trim());
+            accountRepository.save(account);
+        }
     }
 
     public List<AdminMechanicResponse> getPendingAppeals() {
@@ -573,6 +570,7 @@ public class AccountService {
         mp.setSuspensionReason(null);
         mp.setSuspensionEndsAt(null);
         mp.setAppealStatus(AppealStatus.APPROVED);
+        mp.setWrongNumberReportCountPostAppeal(0);
         mechanicProfileRepository.save(mp);
     }
 

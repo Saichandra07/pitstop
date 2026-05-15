@@ -44,6 +44,10 @@ public class Account {
     @Column(nullable = false)
     private Boolean isBanned = false;
 
+    // Set false by admin after confirmed false-report abuse of the escape hatch
+    @Column(nullable = true)
+    private Boolean canUseReachEscapeHatch = true;
+
     @Column(nullable = false)
     private boolean emailVerified = false;
 
@@ -107,4 +111,7 @@ public class Account {
 
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
+
+    public Boolean getCanUseReachEscapeHatch() { return canUseReachEscapeHatch == null || canUseReachEscapeHatch; }
+    public void setCanUseReachEscapeHatch(Boolean canUseReachEscapeHatch) { this.canUseReachEscapeHatch = canUseReachEscapeHatch; }
 }

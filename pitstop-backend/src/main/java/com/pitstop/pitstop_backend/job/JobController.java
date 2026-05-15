@@ -234,6 +234,20 @@ public class JobController {
         return ResponseEntity.ok().build();
     }
 
+    // POST /api/jobs/{id}/reach-alert — USER: notify mechanic that user can't reach them (Stage 1)
+    @PostMapping("/{id}/reach-alert")
+    public ResponseEntity<Void> sendReachAlert(@PathVariable Long id) {
+        jobService.sendReachAlert(id, getAccountId());
+        return ResponseEntity.ok().build();
+    }
+
+    // POST /api/jobs/{id}/mechanic-unreachable — USER: escape hatch after 5-min mechanic silence (Stage 2)
+    @PostMapping("/{id}/mechanic-unreachable")
+    public ResponseEntity<Void> triggerMechanicUnreachable(@PathVariable Long id) {
+        jobService.triggerMechanicUnreachable(id, getAccountId());
+        return ResponseEntity.ok().build();
+    }
+
     // POST /api/jobs/{id}/report — USER only (SecurityConfig)
     @PostMapping("/{id}/report")
     public ResponseEntity<Void> submitReport(@PathVariable Long id,

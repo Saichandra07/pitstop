@@ -146,6 +146,14 @@ public class BroadcastService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Broadcast already responded to");
         }
 
+        // Collect competing mechanics before expiring so we can ping them after accept
+        List<Long> competingProfileIds = jobBroadcastRepository
+                .findByJobIdAndStatus(jobId, JobBroadcastStatus.SENT)
+                .stream()
+                .filter(jb -> !jb.getMechanicProfileId().equals(mechanicProfileId))
+                .map(JobBroadcast::getMechanicProfileId)
+                .collect(Collectors.toList());
+
         // Expire all other competing SENT broadcasts for this job
         jobBroadcastRepository.expireAllSentForJobExcept(jobId, mechanicProfileId);
 
@@ -172,6 +180,15 @@ public class BroadcastService {
         // afterCommitOrNow inside wsPublisher ensures DB is committed before the WS event fires.
         wsPublisher.publishJobUpdate(job.getAccountId(), accountId,
                 java.util.Map.of("type", "JOB_UPDATE"));
+
+        // Tell competing mechanics the job was taken — not user-cancelled — so their frontend
+        // can show the right message instead of "user withdrew the request".
+        for (Long compProfileId : competingProfileIds) {
+            mechanicProfileRepository.findById(compProfileId).ifPresent(mp ->
+                wsPublisher.publishBroadcast(mp.getAccount().getId(),
+                        Map.of("type", "BROADCAST_TAKEN"))
+            );
+        }
         } catch (ObjectOptimisticLockingFailureException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Job was just taken by another mechanic");
         }
@@ -204,18 +221,8 @@ public class BroadcastService {
         long acceptedCount = jobBroadcastRepository.countByJobIdAndMechanicProfileIdAndStatus(
                 jobId, profile.getId(), JobBroadcastStatus.ACCEPTED);
 
-        // Expire leftover SENT broadcasts
-        jobBroadcastRepository.expireAllSentForJob(jobId);
-
-        // Reset job to PENDING Ring 1 — ready for rebroadcast
-        job.setStatus(JobStatus.PENDING);
-        job.setMechanicProfileId(null);
-        job.setBroadcastRing(1);
-        job.setBroadcastStartedAt(LocalDateTime.now());
-        jobRepository.save(job);
-
-        // Restart broadcast from Ring 1 immediately — user is not made to wait
-        broadcastToRing(job);
+        // Reset job to PENDING Ring 1 and restart broadcast immediately
+        rebroadcastJob(job);
 
         // Restore mechanic online at their last known location
         profile.setIsAvailable(true);
@@ -385,6 +392,20 @@ public class BroadcastService {
                  + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
                  * Math.sin(dLon / 2) * Math.sin(dLon / 2);
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    // Resets a job to PENDING Ring 1 and re-broadcasts immediately.
+    // Called by mechanicAbandon (mechanic fault) and triggerMechanicUnreachable (escape hatch).
+    @Transactional
+    public void rebroadcastJob(Job job) {
+        jobBroadcastRepository.expireAllSentForJob(job.getId());
+        job.setStatus(JobStatus.PENDING);
+        job.setMechanicProfileId(null);
+        job.setBroadcastRing(1);
+        job.setBroadcastStartedAt(LocalDateTime.now());
+        job.setReachAlertSentAt(null);
+        jobRepository.save(job);
+        broadcastToRing(job);
     }
 
     // Advance to the next ring or cancel the job if ring 4 is exhausted.

@@ -50,9 +50,10 @@ public class AccountController {
     }
 
     @PostMapping("/auth/register")
-    public ResponseEntity<LoginResponse> register(@RequestBody RegisterRequest request, HttpServletRequest httpRequest) {
-        LoginResponse response = accountService.register(request, getClientIp(httpRequest));
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    public ResponseEntity<Map<String, String>> register(@RequestBody RegisterRequest request, HttpServletRequest httpRequest) {
+        accountService.register(request, getClientIp(httpRequest));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Verification email sent. Please check your inbox."));
     }
 
     @PostMapping("/auth/login")
@@ -275,7 +276,7 @@ public class AccountController {
     @PostMapping("/accounts/appeal")
     @PreAuthorize("hasRole('MECHANIC')")
     public ResponseEntity<Void> submitAppeal(@Valid @RequestBody AppealRequest body) {
-        accountService.submitAppeal(getAccountId(), body.reason());
+        accountService.submitAppeal(getAccountId(), body.reason(), body.updatedPhone());
         return ResponseEntity.ok().build();
     }
 

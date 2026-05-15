@@ -46,6 +46,9 @@ public interface JobRepository extends JpaRepository<Job, Long> {
     // Heartbeat scheduler uses this to find all jobs in active (non-PENDING) states
     List<Job> findByStatusIn(List<JobStatus> statuses);
 
+    // Maturity guard — how many jobs has this user completed?
+    long countByAccountIdAndStatus(Long accountId, JobStatus status);
+
     // Reverse of findEligibleMechanicsInRing — finds PENDING jobs a newly-online mechanic
     // is eligible for and hasn't already received a broadcast for.
     @Query(value = """

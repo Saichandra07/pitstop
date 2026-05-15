@@ -88,8 +88,8 @@ public class SecurityConfig {
                         // ── USER only ───────────────────────────────────────────────
                         // Nearby mechanics count for dashboard map tile
                         .requestMatchers(HttpMethod.GET, "/api/accounts/nearby-mechanics-count").hasRole("USER")
-                        // Update phone number
-                        .requestMatchers(HttpMethod.PATCH, "/api/accounts/phone").hasRole("USER")
+                        // Update phone number — both roles can edit their own phone
+                        .requestMatchers(HttpMethod.PATCH, "/api/accounts/phone").hasAnyRole("USER", "MECHANIC")
                         // Submit SOS
                         .requestMatchers(HttpMethod.POST, "/api/jobs/sos").hasRole("USER")
                         // Submit a review after job completion
@@ -105,6 +105,14 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/jobs/*/reject-complete").hasRole("USER")
                         // Their job feeds
                         .requestMatchers(HttpMethod.GET, "/api/jobs/my/**").hasRole("USER")
+
+                        // ── Reach-alert + escape hatch — USER only ──────────────────
+                        .requestMatchers(HttpMethod.POST, "/api/jobs/*/reach-alert").hasRole("USER")
+                        .requestMatchers(HttpMethod.POST, "/api/jobs/*/mechanic-unreachable").hasRole("USER")
+
+                        // ── Chat — both participants ─────────────────────────────────
+                        .requestMatchers(HttpMethod.GET, "/api/jobs/*/messages").hasAnyRole("USER", "MECHANIC")
+                        .requestMatchers(HttpMethod.POST, "/api/jobs/*/messages/read").hasAnyRole("USER", "MECHANIC")
 
                         // ── ADMIN catch-alls (IDOR guard) ───────────────────────────
                         // Generic GET /api/jobs/{id} and /api/jobs/mechanic/{mechanicProfileId}

@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useBroadcast } from "../context/BroadcastContext";
 import { useActiveJob } from "../context/ActiveJobContext";
+import { useWebSocket } from "../context/WebSocketContext";
+import ChatOverlay from "./ChatOverlay";
 
 const NAV_H = 56;
 
@@ -282,8 +284,12 @@ export default function BroadcastOverlay({ onAcceptSuccess }) {
     handleTakeBack, handleMoveOn,
   } = useBroadcast();
   const { activeJob } = useActiveJob();
+  const { subscribe } = useWebSocket();
 
   const [expanded, setExpanded] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatToast, setChatToast] = useState(null); // { body: string }
+  const chatToastTimer = useRef(null);
 
   // Auto-expand only when a *new* broadcast arrives while mounted (0 → N).
   // Skip on initial mount so navigating to a page with an existing broadcast
@@ -301,6 +307,21 @@ export default function BroadcastOverlay({ onAcceptSuccess }) {
     prevCountRef.current = broadcasts.length;
   }, [broadcasts.length]);
 
+  // Subscribe to job chat when mechanic has an active job — show a tappable toast
+  useEffect(() => {
+    if (!activeJob?.id) return;
+    const unsub = subscribe(`/topic/job/${activeJob.id}/chat`, (frame) => {
+      const msg = JSON.parse(frame.body);
+      // Only notify about messages from the other party (USER)
+      if (msg.senderRole === "USER") {
+        if (chatToastTimer.current) clearTimeout(chatToastTimer.current);
+        setChatToast({ body: msg.body });
+        chatToastTimer.current = setTimeout(() => setChatToast(null), 4000);
+      }
+    });
+    return () => { unsub(); if (chatToastTimer.current) clearTimeout(chatToastTimer.current); };
+  }, [activeJob?.id, subscribe]);
+
   const toast = <BroadcastToast snackbar={snackbar} />;
 
   // Abandon offer takes absolute priority
@@ -317,8 +338,40 @@ export default function BroadcastOverlay({ onAcceptSuccess }) {
     );
   }
 
-  // Mechanic already on a job — ActiveJobFloat owns this space
-  if (activeJob) return toast;
+  // Mechanic on a job — ActiveJobFloat owns bottom space; we overlay chat toast + overlay
+  if (activeJob) {
+    return (
+      <>
+        {chatOpen && (
+          <ChatOverlay
+            jobId={activeJob.id}
+            role="MECHANIC"
+            onClose={() => setChatOpen(false)}
+          />
+        )}
+        {!chatOpen && chatToast && (
+          <div
+            onClick={() => { setChatToast(null); setChatOpen(true); }}
+            style={{
+              position: "fixed", bottom: NAV_H + 12, left: 16, right: 16, zIndex: 60,
+              background: "var(--surface2)", border: "1px solid rgba(255,183,0,0.35)",
+              borderRadius: 12, padding: "12px 16px",
+              display: "flex", alignItems: "center", gap: 10,
+              boxShadow: "0 4px 24px rgba(0,0,0,0.4)", cursor: "pointer",
+            }}
+          >
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--gold)", flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 2 }}>New message from user</div>
+              <div style={{ fontSize: 13, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{chatToast.body}</div>
+            </div>
+            <span style={{ fontSize: 11, color: "var(--gold)", fontWeight: 600, flexShrink: 0 }}>OPEN →</span>
+          </div>
+        )}
+        {toast}
+      </>
+    );
+  }
 
   // No broadcasts
   if (broadcasts.length === 0) return toast;

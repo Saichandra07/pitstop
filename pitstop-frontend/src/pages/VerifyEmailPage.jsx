@@ -14,8 +14,13 @@ export default function VerifyEmailPage() {
 
   useEffect(() => {
     if (!token) { setStatus("error"); setMessage("Invalid or missing verification link."); return; }
-    axios.post("/auth/verify-email", { token })
-      .then((res) => { login(res.data); setStatus("success"); })
+    axios.post(`/auth/verify-email?token=${encodeURIComponent(token)}`)
+      .then((res) => {
+        login(res.data);
+        setStatus("success");
+        const target = res.data.role === "MECHANIC" ? "/mechanic/onboarding/vehicles" : "/dashboard";
+        setTimeout(() => navigate(target), 2000);
+      })
       .catch((err) => {
         setStatus("error");
         setMessage(err.response?.data?.message || "Verification failed. Link may have expired.");
@@ -82,19 +87,9 @@ export default function VerifyEmailPage() {
               </svg>
             </div>
             <p style={{ fontSize: "18px", fontWeight: "700", color: "var(--text)", marginBottom: "8px" }}>Email verified!</p>
-            <p style={{ fontSize: "12px", color: "var(--text-2)", marginBottom: "24px" }}>
-              You're all set. Taking you to your dashboard...
+            <p style={{ fontSize: "12px", color: "var(--text-2)" }}>
+              You're all set. Taking you in…
             </p>
-            <button
-              onClick={() => navigate("/dashboard")}
-              style={{
-                width: "100%", padding: "14px", borderRadius: "12px",
-                background: "var(--red)", border: "none", color: "var(--text)",
-                fontSize: "14px", fontWeight: "700", fontFamily: "inherit", cursor: "pointer",
-              }}
-            >
-              Go to dashboard
-            </button>
           </>
         )}
 

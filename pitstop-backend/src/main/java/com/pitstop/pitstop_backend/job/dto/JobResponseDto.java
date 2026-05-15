@@ -33,6 +33,7 @@ public class JobResponseDto {
     private Double mechanicLat;
     private Double mechanicLng;
     private String userPhone;
+    private LocalDateTime reachAlertSentAt;
 
     public JobResponseDto(Long id, Long accountId, Long mechanicProfileId,
                           JobStatus status, VehicleType vehicleType, ProblemType problemType,
@@ -43,7 +44,8 @@ public class JobResponseDto {
                           String mechanicName, String mechanicPhone,
                           Double mechanicRating, Integer mechanicReviewCount,
                           String userName, String mechanicPhotoUrl,
-                          Double mechanicLat, Double mechanicLng, String userPhone) {
+                          Double mechanicLat, Double mechanicLng, String userPhone,
+                          LocalDateTime reachAlertSentAt) {
         this.id = id;
         this.accountId = accountId;
         this.mechanicProfileId = mechanicProfileId;
@@ -69,6 +71,7 @@ public class JobResponseDto {
         this.mechanicLat = mechanicLat;
         this.mechanicLng = mechanicLng;
         this.userPhone = userPhone;
+        this.reachAlertSentAt = reachAlertSentAt;
     }
 
     public Long getId() { return id; }
@@ -96,4 +99,5 @@ public class JobResponseDto {
     public Double getMechanicLat() { return mechanicLat; }
     public Double getMechanicLng() { return mechanicLng; }
     public String getUserPhone() { return userPhone; }
+    public LocalDateTime getReachAlertSentAt() { return reachAlertSentAt; }
 }

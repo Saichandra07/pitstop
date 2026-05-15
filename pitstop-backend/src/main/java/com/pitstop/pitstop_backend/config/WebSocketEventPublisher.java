@@ -25,6 +25,13 @@ public class WebSocketEventPublisher {
         });
     }
 
+    // Push a chat message to both sides of the job.
+    public void publishChatMessage(Long jobId, Object payload) {
+        afterCommitOrNow(() ->
+            template.convertAndSend("/topic/job/" + jobId + "/chat", payload)
+        );
+    }
+
     // Push a broadcast notification to a single mechanic.
     // Payload is intentionally minimal — frontend calls poll() on receipt.
     public void publishBroadcast(Long mechanicAccountId, Object payload) {

@@ -91,6 +91,11 @@ public class MechanicProfile {
     @Column(nullable = true)
     private Integer reviewCount = 0;
 
+    // Tracks phone-related reports filed after a suspension appeal was approved.
+    // Reaching 2 triggers a permanent ban — zero tolerance for repeat offenders.
+    @Column(nullable = true)
+    private Integer wrongNumberReportCountPostAppeal = 0;
+
     @PrePersist
     protected void onCreate() {
         if (this.verificationStatus == null) {
@@ -107,6 +112,9 @@ public class MechanicProfile {
         }
         if (this.appealStatus == null) {
             this.appealStatus = AppealStatus.NONE;
+        }
+        if (this.wrongNumberReportCountPostAppeal == null) {
+            this.wrongNumberReportCountPostAppeal = 0;
         }
     }
 
@@ -175,4 +183,7 @@ public class MechanicProfile {
 
     public Integer getReviewCount() { return reviewCount; }
     public void setReviewCount(Integer reviewCount) { this.reviewCount = reviewCount; }
+
+    public Integer getWrongNumberReportCountPostAppeal() { return wrongNumberReportCountPostAppeal; }
+    public void setWrongNumberReportCountPostAppeal(Integer wrongNumberReportCountPostAppeal) { this.wrongNumberReportCountPostAppeal = wrongNumberReportCountPostAppeal; }
 }

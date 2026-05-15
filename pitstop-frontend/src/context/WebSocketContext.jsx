@@ -10,6 +10,13 @@ export function WebSocketProvider({ children }) {
   const registeredRef = useRef([]);  // source of truth: all desired { destination, callback }
   const activeRef     = useRef(new Map()); // STOMP sub handles for the current connection
 
+  const publish = useCallback((destination, body) => {
+    const client = clientRef.current;
+    if (client?.connected) {
+      client.publish({ destination, body: JSON.stringify(body) });
+    }
+  }, []);
+
   const subscribe = useCallback((destination, callback) => {
     const entry = { destination, callback };
     registeredRef.current.push(entry);
@@ -67,7 +74,7 @@ export function WebSocketProvider({ children }) {
   }, [token]);
 
   return (
-    <WebSocketContext.Provider value={{ subscribe }}>
+    <WebSocketContext.Provider value={{ subscribe, publish }}>
       {children}
     </WebSocketContext.Provider>
   );

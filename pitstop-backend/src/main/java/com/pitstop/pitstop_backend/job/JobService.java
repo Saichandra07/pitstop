@@ -1,6 +1,7 @@
 package com.pitstop.pitstop_backend.job;
 
 import com.pitstop.pitstop_backend.account.*;
+import com.pitstop.pitstop_backend.chat.ChatMessageRepository;
 import com.pitstop.pitstop_backend.config.WebSocketEventPublisher;
 import com.pitstop.pitstop_backend.exception.ResourceNotFoundException;
 import com.pitstop.pitstop_backend.job.dto.AdminJobResponse;
@@ -30,6 +31,10 @@ public class JobService {
     private BroadcastService broadcastService;
     @Autowired
     private WebSocketEventPublisher wsPublisher;
+    @Autowired
+    private ChatMessageRepository chatMessageRepository;
+    @Autowired
+    private ReportService reportService;
 
     public JobService(JobRepository jobRepository,
                       MechanicProfileRepository mechanicProfileRepository,
@@ -95,7 +100,8 @@ public class JobService {
                 mechanicPhotoUrl,
                 mechanicLat,
                 mechanicLng,
-                userPhone
+                userPhone,
+                job.getReachAlertSentAt()
         );
     }
 
@@ -284,6 +290,91 @@ public class JobService {
                         List.of(JobStatus.ACCEPTED, JobStatus.ARRIVAL_REQUESTED,
                                 JobStatus.IN_PROGRESS, JobStatus.COMPLETION_REQUESTED))
                 .stream().map(this::toDto).findFirst();
+    }
+
+    // ── Reach-Alert + Escape Hatch ─────────────────────────────────────────────
+
+    // User reports they can't reach the mechanic — sends a WS alert to mechanic.
+    // One-shot: once sent, the alert cannot be re-sent for the same job.
+    @Transactional
+    public void sendReachAlert(Long jobId, Long userId) {
+        Job job = findJobOrThrow(jobId);
+        if (!job.getAccountId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your job");
+        }
+        if (job.getStatus() != JobStatus.ACCEPTED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reach alert only available while mechanic is en route");
+        }
+        if (job.getReachAlertSentAt() != null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Alert already sent");
+        }
+        job.setReachAlertSentAt(LocalDateTime.now());
+        Job saved = jobRepository.save(job);
+        Long mechanicAccId = mechAccountId(saved.getMechanicProfileId());
+        JobResponseDto dto = toDto(saved);
+        wsPublisher.publishJobUpdate(saved.getAccountId(), mechanicAccId, dto);
+    }
+
+    // User triggers the escape hatch after mechanic ignores reach alert for 5+ min.
+    // Job is re-broadcast with no cancel penalty to the user; auto-report is filed.
+    @Transactional
+    public void triggerMechanicUnreachable(Long jobId, Long userId) {
+        Job job = findJobOrThrow(jobId);
+        if (!job.getAccountId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your job");
+        }
+        if (job.getStatus() != JobStatus.ACCEPTED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escape hatch only available while mechanic is en route");
+        }
+        if (job.getReachAlertSentAt() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Please notify the mechanic first before cancelling");
+        }
+        if (job.getReachAlertSentAt().isAfter(LocalDateTime.now().minusMinutes(5))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Please wait for mechanic to respond (5 minutes from alert)");
+        }
+
+        // Check if user is allowed to use this feature
+        Account userAccount = accountRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
+        if (!userAccount.getCanUseReachEscapeHatch()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot use this feature");
+        }
+
+        // Check if mechanic responded in chat after the alert was sent
+        Long mechanicAccId = mechAccountId(job.getMechanicProfileId());
+        if (mechanicAccId != null && chatMessageRepository.existsBySenderIdAndJobIdAndSentAtAfter(
+                mechanicAccId, jobId, job.getReachAlertSentAt())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Your mechanic has responded in chat — please check your messages");
+        }
+
+        Long originalMechanicProfileId = job.getMechanicProfileId();
+
+        // Increment mid-job cancel count and restore mechanic online (escape hatch = mechanic fault)
+        if (originalMechanicProfileId != null) {
+            mechanicProfileRepository.findById(originalMechanicProfileId).ifPresent(mp -> {
+                mp.setMidJobCancels(mp.getMidJobCancels() + 1);
+                mp.setIsAvailable(true);
+                mp.setLatitude(mp.getLastKnownLatitude());
+                mp.setLongitude(mp.getLastKnownLongitude());
+                mechanicProfileRepository.save(mp);
+            });
+        }
+
+        // Rebroadcast job with no user penalty — this is mechanic fault
+        broadcastService.rebroadcastJob(job);
+
+        // Block the escaped mechanic from receiving this job again via notifyNewlyOnlineMechanic
+        if (originalMechanicProfileId != null) {
+            jobBroadcastRepository.declineAllForMechanicAndJob(jobId, originalMechanicProfileId);
+        }
+
+        // Notify both sides — mechanic needs instant update with reason so frontend shows correct message
+        wsPublisher.publishJobUpdate(job.getAccountId(), mechanicAccId,
+                java.util.Map.of("type", "JOB_UPDATE", "reason", "UNREACHABLE_ESCAPE"));
+
+        // Auto-file report (bypasses maturity guard — system-generated)
+        reportService.fileAutoReport(jobId, userId);
     }
 
     // ── Status Transitions ─────────────────────────────────────────────────────

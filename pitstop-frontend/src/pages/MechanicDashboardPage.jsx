@@ -98,6 +98,7 @@ function RejectedWall({ reason, onLogout, onResubmit }) {
 
 function SuspendedWall({ me, onLogout, onAppealSuccess }) {
   const [reason, setReason]       = useState("");
+  const [phone, setPhone]         = useState(me?.phone ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]         = useState(null);
 
@@ -109,7 +110,10 @@ function SuspendedWall({ me, onLogout, onAppealSuccess }) {
     setSubmitting(true);
     setError(null);
     try {
-      await api.post("/accounts/appeal", { reason: reason.trim() });
+      await api.post("/accounts/appeal", {
+        reason: reason.trim(),
+        updatedPhone: phone.trim() || null,
+      });
       setReason("");
       await onAppealSuccess();
     } catch (err) {
@@ -159,6 +163,26 @@ function SuspendedWall({ me, onLogout, onAppealSuccess }) {
               resize: "vertical", fontFamily: "inherit", boxSizing: "border-box",
             }}
           />
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>
+              Update phone number (optional)
+            </div>
+            <input
+              type="tel"
+              placeholder="+91 98765 43210"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              style={{
+                width: "100%", borderRadius: 10,
+                background: "var(--surface2)", border: "1px solid var(--border)",
+                color: "var(--text)", fontSize: 13, padding: "10px 12px",
+                fontFamily: "inherit", boxSizing: "border-box", outline: "none",
+              }}
+            />
+          </div>
+          <p style={{ fontSize: 11, color: "var(--red)", marginTop: 12, lineHeight: "1.5", opacity: 0.8 }}>
+            If wrong number or unreachable reports continue after your appeal is approved, your account will be permanently banned.
+          </p>
           {error && <p style={{ fontSize: 12, color: "var(--red)", marginTop: 6 }}>{error}</p>}
           <button
             onClick={handleSubmit}

@@ -10,5 +10,5 @@ public record RegisterRequest(
         Role role,
         String phone,
         Double serviceRadiusKm,
-        ExpertiseRequest expertise  // null for USER, required for MECHANIC — validated in service
+        ExpertiseRequest expertise
 ) {}

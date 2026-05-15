@@ -21,10 +21,11 @@ export function ActiveJobProvider({ children }) {
   const [snackbar, setSnackbar]                         = useState(null);
   const [justCompletedJobId, setJustCompletedJobId]     = useState(null);   // user: triggers RatingPrompt
 
-  const snackbarTimer      = useRef(null);
-  const prevStatusRef      = useRef(null);   // user-side: previous job status
-  const prevActiveJobRef   = useRef(null);   // mechanic-side: previous job object
-  const expectingJobEndRef = useRef(false);  // mechanic: we triggered the job end (not user)
+  const snackbarTimer           = useRef(null);
+  const prevStatusRef           = useRef(null);   // user-side: previous job status
+  const prevActiveJobRef        = useRef(null);   // mechanic-side: previous job object
+  const expectingJobEndRef      = useRef(false);  // mechanic: we triggered the job end (not user)
+  const mechJobRemovedReasonRef = useRef(null);   // mechanic: reason job disappeared (from WS payload)
 
   const showSnackbar = useCallback((message, type = "info") => {
     clearTimeout(snackbarTimer.current);
@@ -42,12 +43,17 @@ export function ActiveJobProvider({ children }) {
         // Job disappeared without mechanic action — distinguish completion from cancellation
         if (prevActiveJobRef.current?.id && !job && !expectingJobEndRef.current) {
           const prevStatus = prevActiveJobRef.current.status;
-          // IN_PROGRESS or COMPLETION_REQUESTED disappearing → user confirmed completion.
-          // ACCEPTED or ARRIVAL_REQUESTED disappearing → user cancelled (they can cancel from those states).
           if (prevStatus === "COMPLETION_REQUESTED" || prevStatus === "IN_PROGRESS") {
             setJobCompletedSuccessfully(true);
           } else {
             setJobCancelledByUser(true);
+            const reason = mechJobRemovedReasonRef.current;
+            mechJobRemovedReasonRef.current = null;
+            if (reason === "UNREACHABLE_ESCAPE") {
+              showSnackbar("User cancelled — you didn't respond to their calls and messages", "warning");
+            } else {
+              showSnackbar("User cancelled the job", "warning");
+            }
           }
         }
         prevActiveJobRef.current = job;
@@ -102,7 +108,13 @@ export function ActiveJobProvider({ children }) {
   // WebSocket subscription — trigger immediate refetch on any job-update event
   useEffect(() => {
     if (!user?.id || !role || role === "ADMIN") return;
-    const unsub = subscribe(`/topic/account/${user.id}/job-update`, () => {
+    const unsub = subscribe(`/topic/account/${user.id}/job-update`, (frame) => {
+      try {
+        const payload = JSON.parse(frame.body);
+        if (role === "MECHANIC" && payload?.reason === "UNREACHABLE_ESCAPE") {
+          mechJobRemovedReasonRef.current = "UNREACHABLE_ESCAPE";
+        }
+      } catch {}
       fetchActiveJob();
     });
     return () => unsub?.();

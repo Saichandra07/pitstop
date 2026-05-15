@@ -13,9 +13,10 @@ export function BroadcastProvider({ children }) {
   const [abandonedJobOffer, setAbandonedJobOffer] = useState(null);
   const [snackbar, setSnackbar]             = useState(null);
 
-  const receivedAtsRef = useRef({});  // { [broadcastId]: timestamp }
-  const mechActedRef   = useRef({});  // { [broadcastId]: true }
-  const snackbarTimer  = useRef(null);
+  const receivedAtsRef         = useRef({});  // { [broadcastId]: timestamp }
+  const mechActedRef           = useRef({});  // { [broadcastId]: true }
+  const snackbarTimer          = useRef(null);
+  const suppressCancelSnackRef = useRef(false); // set when job taken by another mechanic
 
   const showSnackbar = useCallback((message, type = "info") => {
     clearTimeout(snackbarTimer.current);
@@ -30,9 +31,11 @@ export function BroadcastProvider({ children }) {
       const incoming = res.data || [];
       const newIds   = new Set(incoming.map(b => b.broadcastId));
 
-      // Detect broadcasts that disappeared without mechanic action → user cancelled
+      // Detect broadcasts that disappeared without mechanic action
+      const suppress = suppressCancelSnackRef.current;
+      suppressCancelSnackRef.current = false;
       for (const prevId of Object.keys(receivedAtsRef.current).map(Number)) {
-        if (!newIds.has(prevId) && !mechActedRef.current[prevId]) {
+        if (!newIds.has(prevId) && !mechActedRef.current[prevId] && !suppress) {
           showSnackbar("An SOS request was withdrawn by the user", "info");
         }
       }
@@ -69,11 +72,20 @@ export function BroadcastProvider({ children }) {
   // WebSocket subscription — trigger immediate poll on any broadcast event
   useEffect(() => {
     if (!user?.id || user?.role !== "MECHANIC") return;
-    const unsub = subscribe(`/topic/account/${user.id}/broadcast`, () => {
+    const unsub = subscribe(`/topic/account/${user.id}/broadcast`, (frame) => {
+      try {
+        const payload = JSON.parse(frame.body);
+        if (payload?.type === "BROADCAST_TAKEN") {
+          suppressCancelSnackRef.current = true;
+          showSnackbar("⚡ Too slow! Another mechanic grabbed that one. Hesitate and you lose 😤", "info");
+          poll();
+          return;
+        }
+      } catch {}
       poll();
     });
     return () => unsub?.();
-  }, [user?.id, user?.role, subscribe, poll]);
+  }, [user?.id, user?.role, subscribe, poll, showSnackbar]);
 
   const handleAccept = useCallback(async (jobId, broadcastId, onSuccess) => {
     mechActedRef.current[broadcastId] = true;

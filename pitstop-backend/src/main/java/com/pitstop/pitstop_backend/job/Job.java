@@ -132,4 +132,11 @@ public class Job {
 
     public CancellationReason getCancellationReason() { return cancellationReason; }
     public void setCancellationReason(CancellationReason cancellationReason) { this.cancellationReason = cancellationReason; }
+
+    // Set when user reports they can't reach the mechanic — null means no alert sent yet
+    @Column(nullable = true)
+    private LocalDateTime reachAlertSentAt;
+
+    public LocalDateTime getReachAlertSentAt() { return reachAlertSentAt; }
+    public void setReachAlertSentAt(LocalDateTime reachAlertSentAt) { this.reachAlertSentAt = reachAlertSentAt; }
 }
