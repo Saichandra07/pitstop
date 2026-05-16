@@ -34,3 +34,5 @@ build/
 
 # Secrets — never commit
 src/main/resources/application.properties
+src/main/resources/firebase-service-account.json
+src/main/resources/*-service-account.json

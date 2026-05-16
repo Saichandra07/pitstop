@@ -42,8 +42,14 @@ export function WebSocketProvider({ children }) {
       return;
     }
 
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+    const brokerURL = apiBase
+      .replace(/^https:\/\//, 'wss://')
+      .replace(/^http:\/\//, 'ws://')
+      .replace(/\/api$/, '/ws');
+
     const client = new Client({
-      brokerURL: "ws://localhost:8080/ws",
+      brokerURL,
       connectHeaders: { Authorization: `Bearer ${token}` },
       reconnectDelay: 2000,
       onConnect: () => {
@@ -59,7 +65,7 @@ export function WebSocketProvider({ children }) {
         activeRef.current.clear();
       },
       onStompError: (frame) => {
-        console.warn("STOMP error", frame);
+        console.warn("STOMP error", frame.command, frame.headers?.message);
       },
     });
 

@@ -23,6 +23,9 @@ pitstop-frontend/.env.local
 pitstop-backend/target/
 pitstop-backend/.env
 pitstop-backend/src/main/resources/application.properties
+pitstop-backend/src/main/resources/firebase-service-account.json
+**/firebase-service-account.json
+**/*-service-account.json
 
 # OS
 .DS_Store
