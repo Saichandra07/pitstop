@@ -30,3 +30,4 @@ pitstop-backend/src/main/resources/firebase-service-account.json
 # OS
 .DS_Store
 Thumbs.db
+.vercel
